@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../services/remote_config_service.dart';
 import '../services/rss_service.dart';
+import '../widgets/news_ribbon.dart';
 
 /// Live news ticker: a scrolling headline strip at the top of Home.
 ///
-/// Source: the Nigraan TV RSS feed (https://nigraantv.xyz/rss.xml),
+/// The strip IS the blue ribbon (remote audio-box.json `ribbon.color`,
+/// #3D5AFE) with a RED "LIVE" chip — the news ticker runs ON the blue
+/// ribbon. Source: the Nigraan TV RSS feed (https://nigraantv.xyz/rss.xml),
 /// re-fetched every 5 minutes. Tapping a headline opens the FULL article
 /// page on the website (with its banner ads) — reading earns no coins;
 /// the ticker exists to send traffic to nigraantv.xyz.
@@ -111,14 +114,20 @@ class _NewsTickerState extends State<NewsTicker> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Blue ribbon background (remote `ribbon.color`, #3D5AFE default);
+    // the news ticker runs ON the blue ribbon.
+    final ribbonBlue = NewsRibbon.parseColor(
+      RemoteConfigService.instance.config.ribbon.color,
+    );
     return Container(
-      color: theme.colorScheme.primary,
+      color: ribbonBlue,
       height: 38,
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            color: theme.colorScheme.secondary,
+            // LIVE stays RED wherever it is written.
+            color: theme.colorScheme.primary,
             height: 38,
             alignment: Alignment.center,
             child: const Text(

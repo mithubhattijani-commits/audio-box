@@ -7,7 +7,6 @@ import '../services/coins_service.dart';
 import '../services/remote_config_service.dart';
 import '../services/rss_service.dart';
 import '../services/updater_service.dart';
-import '../widgets/news_ribbon.dart';
 import '../widgets/news_ticker.dart';
 import 'article_listen_screen.dart';
 import 'article_webview_screen.dart';
@@ -174,10 +173,10 @@ class HomeScreen extends StatelessWidget {
               },
             ),
             // Live news ticker (RSS feed, refreshes every 5 min).
+            // The ticker strip IS the blue ribbon (red LIVE chip +
+            // news scrolling on the blue ribbon) — no separate ribbon
+            // below it.
             NewsTicker(onTapArticle: (a) => _openArticle(context, a)),
-            // Remote-controlled ribbon directly under the ticker
-            // (audio-box.json `ribbon`; empty text = solid bar).
-            const NewsRibbon(),
             // Sponsored ad card — TJ Earn rule: only when enabled AND
             // title AND action_url are both non-empty.
             ValueListenableBuilder<RemoteConfig>(
