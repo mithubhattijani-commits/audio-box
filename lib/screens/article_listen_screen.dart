@@ -205,7 +205,7 @@ class _ArticleListenScreenState extends State<ArticleListenScreen> {
                             children: [
                               Expanded(
                                 child: DropdownButtonFormField<TtsVoice>(
-                                  value: _voice,
+                                  initialValue: _voice,
                                   decoration: InputDecoration(
                                     labelText:
                                         AppStrings.tr('voice', locale),
