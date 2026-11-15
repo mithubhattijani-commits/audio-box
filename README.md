@@ -291,7 +291,7 @@ flutter build apk --debug \
 CI (`.github/workflows/build-apk.yml`): builds a **release APK** on push to
 `main` (public repo = free Actions) and uploads it as an artifact.
 Release signing is LIVE since 15 Nov 2026: the keystore
-(`android/app/release.keystore.enc`, AES-256 encrypted, passphrase in the
+(`android/app/audiobox-release.keystore.enc`, AES-256 encrypted, passphrase in the
 `KEYSTORE_PASSPHRASE` repo secret) is decrypted in CI and every release
 build is signed with the same permanent key — installed apps update
 without uninstalling. The plaintext keystore is gitignored and backed up
