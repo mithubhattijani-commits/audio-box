@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/strings.dart';
 import '../models/tts_voice.dart';
+import '../services/ads_service.dart';
 import '../services/audio_library_service.dart';
 import '../services/coins_service.dart';
 import '../services/rss_service.dart';
@@ -296,6 +297,7 @@ class _ArticleListenScreenState extends State<ArticleListenScreen> {
                     ),
                   ],
                 ),
+      bottomNavigationBar: const UnityBannerAdWidget(zone: 'tools'),
     );
   }
 }
