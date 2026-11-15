@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 
 import 'remote_config_service.dart';
@@ -51,15 +53,17 @@ class RssService {
   static const _cacheTtl = Duration(minutes: 5);
 
   static Future<List<RssArticle>> fetchLatest({int limit = 30}) async {
-    // Feed URL from the remote config — change it on the website, no
-    // rebuild. Defaults to the live nigraantv.xyz RSS feed.
+    // ENCODING FIX (15 Nov 2026): the site serves rss.xml as
+    // "application/xml" with NO charset, so Dart's http package decodes
+    // res.body as Latin-1 — and UTF-8 Urdu bytes then render as
+    // mojibake ("Ø³ÙÙÛ..."). Decode the raw bytes as UTF-8 ourselves.
     final res = await http
         .get(Uri.parse(RemoteConfigService.instance.config.feeds.rssUrl))
         .timeout(const Duration(seconds: 20));
     if (res.statusCode != 200) {
       throw Exception('RSS failed (${res.statusCode})');
     }
-    return parse(res.body, limit: limit);
+    return parse(utf8.decode(res.bodyBytes), limit: limit);
   }
 
   /// Cached fetch for widgets rebuilt often (e.g. Home's FutureBuilder):
