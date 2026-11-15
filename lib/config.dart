@@ -6,7 +6,7 @@
 ///
 ///   flutter build apk --debug \
 ///     --dart-define=SUPABASE_URL=https://znyaxxkhhopdqrvxhxmb.supabase.co \
-///     --dart-define=SUPABASE_ANON_KEY=<same public anon key as TJ Earn>
+///     --dart-define=SUPABASE_ANON_KEY=YOUR_ANON_KEY
 class AppConfig {
   /// Public Supabase project URL (the shared "tj-earn" project).
   /// Default is the real project URL so local debug builds work without
