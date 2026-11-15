@@ -38,28 +38,40 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      # Debug APK proves compilation. Release signing is a follow-up
-      # (see README): create a keystore, add it as a secret, and switch
-      # this step to --release like TJ Earn's workflow.
-      - name: Build debug APK
+      # Release signing: the keystore is stored ENCRYPTED in the repo
+      # (android/app/release.keystore.enc) and decrypted here with the
+      # KEYSTORE_PASSPHRASE repo secret. Every release build is signed
+      # with the SAME permanent key, so installed apps update without
+      # uninstalling.
+      - name: Decrypt release keystore
+        run: openssl enc -d -aes-256-cbc -salt -pbkdf2 -in android/app/release.keystore.enc -out android/app/release.keystore -pass pass:"${{ secrets.KEYSTORE_PASSPHRASE }}"
+
+      - name: Build release APK
+        env:
+          KEYSTORE_FILE: android/app/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSPHRASE }}
+          KEY_ALIAS: audiobox
+          KEY_PASSWORD: ${{ secrets.KEYSTORE_PASSPHRASE }}
         run: |
-          flutter build apk --debug \
+          flutter build apk --release \
             --dart-define=SUPABASE_URL=https://znyaxxkhhopdqrvxhxmb.supabase.co \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
 
       - name: Verify APK
         run: |
-          ls -la build/app/outputs/flutter-apk/app-debug.apk
-          APK=build/app/outputs/flutter-apk/app-debug.apk
+          ls -la build/app/outputs/flutter-apk/app-release.apk
+          APK=build/app/outputs/flutter-apk/app-release.apk
           AAPT2=$(ls "$ANDROID_SDK_ROOT"/build-tools/*/aapt2 | head -1)
           "$AAPT2" dump badging "$APK" | grep -F "package: name='com.nigraantv.audiobox'"
           EXPECTED_VC=$(grep -E '^version:' pubspec.yaml | sed 's/.*+//')
           EXPECTED_VN=$(grep -E '^version:' pubspec.yaml | sed 's/^version: //; s/+.*//')
           "$AAPT2" dump badging "$APK" | grep -F "versionCode='$EXPECTED_VC'"
           "$AAPT2" dump badging "$APK" | grep -F "versionName='$EXPECTED_VN'"
+          APKSIGNER=$(ls "$ANDROID_SDK_ROOT"/build-tools/*/apksigner | head -1)
+          "$APKSIGNER" verify --verbose "$APK"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: audio-box-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: audio-box-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
