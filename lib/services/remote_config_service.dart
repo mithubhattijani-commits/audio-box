@@ -108,6 +108,8 @@ class TtsConfig {
     this.voices = const ['aoede', 'charon', 'asad', 'uzma'],
     this.coinsPerMinute = 50,
     this.dailyCap = 10,
+    this.proxyUrl =
+        'https://nigraan-tv-tts-proxy.mithubhattijani.workers.dev',
   });
 
   final bool geminiEnabled;
@@ -122,6 +124,11 @@ class TtsConfig {
   /// Max audio generations per user per day (0 = unlimited).
   final int dailyCap;
 
+  /// TTS proxy base URL (no key in the app — keys stay server-side in
+  /// the Worker). Change it here to point the app at a new proxy
+  /// without a rebuild.
+  final String proxyUrl;
+
   factory TtsConfig.fromJson(Map<String, dynamic> j) {
     final rawVoices = j['voices'];
     List<String> voices = const ['aoede', 'charon', 'asad', 'uzma'];
@@ -130,13 +137,93 @@ class TtsConfig {
           rawVoices.map((v) => v.toString()).where((v) => v.isNotEmpty).toList();
       if (parsed.isNotEmpty) voices = parsed;
     }
+    final proxyUrl = (j['proxy_url'] ?? '').toString().trim();
     return TtsConfig(
       geminiEnabled: j['gemini_enabled'] != false,
       edgeEnabled: j['edge_enabled'] != false,
       voices: voices,
       coinsPerMinute: (j['coins_per_minute'] as num?)?.toInt() ?? 50,
       dailyCap: (j['daily_cap'] as num?)?.toInt() ?? 10,
+      proxyUrl: proxyUrl.isEmpty
+          ? 'https://nigraan-tv-tts-proxy.mithubhattijani.workers.dev'
+          : proxyUrl,
     );
+  }
+}
+
+/// Unity IDs controlled from the website — no rebuild needed.
+/// A changed Game ID takes effect on the NEXT app launch (the Unity SDK
+/// initialises once at startup); placement IDs take effect on the next
+/// ad load. Defaults are the live values, so an unreachable config
+/// keeps the current ads working.
+class UnityConfig {
+  const UnityConfig({
+    this.gameId = '800438808',
+    this.rewardedPlacementId = 'BP_Rewarded_Android',
+    this.bannerPlacementId = 'BP_Banner_Android',
+    this.appOpenPlacementId = 'BP_Interstitial_Android',
+  });
+
+  final String gameId;
+  final String rewardedPlacementId;
+  final String bannerPlacementId;
+  final String appOpenPlacementId;
+
+  factory UnityConfig.fromJson(Map<String, dynamic> j) {
+    String s(Object? v, String dflt) {
+      final t = (v ?? '').toString().trim();
+      return t.isEmpty ? dflt : t;
+    }
+
+    return UnityConfig(
+      gameId: s(j['game_id'], '800438808'),
+      rewardedPlacementId: s(j['rewarded_placement_id'], 'BP_Rewarded_Android'),
+      bannerPlacementId: s(j['banner_placement_id'], 'BP_Banner_Android'),
+      appOpenPlacementId:
+          s(j['app_open_placement_id'], 'BP_Interstitial_Android'),
+    );
+  }
+}
+
+/// Site feeds the app reads (ticker, article list, briefing).
+class FeedsConfig {
+  const FeedsConfig({
+    this.rssUrl = 'https://nigraantv.xyz/rss.xml',
+    this.briefingJsonUrl = 'https://nigraantv.xyz/briefing.json',
+    this.briefingMp3Url = 'https://nigraantv.xyz/briefing.mp3',
+  });
+
+  final String rssUrl;
+  final String briefingJsonUrl;
+  final String briefingMp3Url;
+
+  factory FeedsConfig.fromJson(Map<String, dynamic> j) {
+    String s(Object? v, String dflt) {
+      final t = (v ?? '').toString().trim();
+      return t.isEmpty ? dflt : t;
+    }
+
+    return FeedsConfig(
+      rssUrl: s(j['rss_url'], 'https://nigraantv.xyz/rss.xml'),
+      briefingJsonUrl:
+          s(j['briefing_json_url'], 'https://nigraantv.xyz/briefing.json'),
+      briefingMp3Url:
+          s(j['briefing_mp3_url'], 'https://nigraantv.xyz/briefing.mp3'),
+    );
+  }
+}
+
+/// Splash poster. Empty imageUrl = the bundled poster. Set it to a
+/// picture URL to change the splash without a rebuild (applies from the
+/// next app launch after the config is fetched; the bundled poster
+/// stays as the offline/broken-link fallback).
+class SplashConfig {
+  const SplashConfig({this.imageUrl = ''});
+
+  final String imageUrl;
+
+  factory SplashConfig.fromJson(Map<String, dynamic> j) {
+    return SplashConfig(imageUrl: (j['image_url'] ?? '').toString().trim());
   }
 }
 
@@ -166,6 +253,9 @@ class RemoteConfig {
     this.sponsoredAd = const SponsoredAdConfig(),
     this.announcement = const AnnouncementConfig(),
     this.tts = const TtsConfig(),
+    this.unity = const UnityConfig(),
+    this.feeds = const FeedsConfig(),
+    this.splash = const SplashConfig(),
   });
 
   /// Master switch for ALL Unity ads.
@@ -185,6 +275,15 @@ class RemoteConfig {
   final SponsoredAdConfig sponsoredAd;
   final AnnouncementConfig announcement;
   final TtsConfig tts;
+
+  /// Unity Game ID + placement IDs (no rebuild to change them).
+  final UnityConfig unity;
+
+  /// Site feeds (ticker, articles, briefing).
+  final FeedsConfig feeds;
+
+  /// Splash poster picture.
+  final SplashConfig splash;
 
   bool bannerEnabled(String zone) => adsEnabled && (banners[zone] == true);
 
@@ -260,6 +359,15 @@ class RemoteConfig {
       tts: j['tts'] is Map<String, dynamic>
           ? TtsConfig.fromJson(j['tts'] as Map<String, dynamic>)
           : const TtsConfig(),
+      unity: j['unity'] is Map<String, dynamic>
+          ? UnityConfig.fromJson(j['unity'] as Map<String, dynamic>)
+          : const UnityConfig(),
+      feeds: j['feeds'] is Map<String, dynamic>
+          ? FeedsConfig.fromJson(j['feeds'] as Map<String, dynamic>)
+          : const FeedsConfig(),
+      splash: j['splash'] is Map<String, dynamic>
+          ? SplashConfig.fromJson(j['splash'] as Map<String, dynamic>)
+          : const SplashConfig(),
     );
   }
 }
@@ -283,6 +391,12 @@ class RemoteConfigService {
 
   Timer? _pollTimer;
   bool _refreshing = false;
+
+  /// Loads the cached config (from a previous session) without starting
+  /// the network fetch or the poll timer. main() calls this before the
+  /// first frame so the splash screen can already use a remotely-set
+  /// poster image on this launch.
+  Future<void> loadCache() => _loadFromCache();
 
   /// Loads the cache first (fast), then ALWAYS fetches fresh from the
   /// network — no TTL gate — and starts the ~60s poll. Never blocks the
