@@ -1,1 +1,39 @@
-name: audio_box_from_jaani
+name: audio_box
+description: "Audio Box From Jaani — text-to-speech studio by Nigraan TV. Type text, get audio (Gemini + Edge voices), earn coins by watching Unity rewarded ads."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
+  # Same versions as TJ Earn (verified from the tj-earn repo, Nov 2026).
+  supabase_flutter: ^2.9.0
+  unity_ads_plugin: ^0.5.0
+  http: ^1.3.0
+  path_provider: ^2.1.5
+  shared_preferences: ^2.3.3
+  share_plus: ^10.1.4
+  crypto: ^3.0.6
+  # Audio playback for generated files + the news briefing stream.
+  audioplayers: ^6.4.0
+  # In-app update: open the APK download URL + article links.
+  url_launcher: ^6.2.5
+  # Installed versionCode for the update check.
+  package_info_plus: ^8.3.0
+  # Full article pages in-app (real page, website banner ads included).
+  webview_flutter: ^4.8.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
