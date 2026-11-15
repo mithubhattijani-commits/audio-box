@@ -1,6 +1,6 @@
 import 'package:http/http.dart' as http;
 
-import '../config.dart';
+import 'remote_config_service.dart';
 
 /// One article from the Nigraan TV RSS feed.
 class RssArticle {
@@ -51,8 +51,10 @@ class RssService {
   static const _cacheTtl = Duration(minutes: 5);
 
   static Future<List<RssArticle>> fetchLatest({int limit = 30}) async {
+    // Feed URL from the remote config — change it on the website, no
+    // rebuild. Defaults to the live nigraantv.xyz RSS feed.
     final res = await http
-        .get(Uri.parse(AppConfig.siteRssUrl))
+        .get(Uri.parse(RemoteConfigService.instance.config.feeds.rssUrl))
         .timeout(const Duration(seconds: 20));
     if (res.statusCode != 200) {
       throw Exception('RSS failed (${res.statusCode})');
