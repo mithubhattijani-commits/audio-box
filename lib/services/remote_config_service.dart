@@ -98,6 +98,42 @@ class AnnouncementConfig {
   }
 }
 
+/// Ribbon bar under the Home news ticker, fully remote-controlled.
+/// Defaults (bundled fail-soft): enabled=true, color #3D5AFE, empty
+/// text (solid bar only), height 36. Only the fallback color is
+/// compiled in — every visible value comes from audio-box.json.
+class RibbonConfig {
+  const RibbonConfig({
+    this.enabled = true,
+    this.color = '#3D5AFE',
+    this.text = '',
+    this.height = 36,
+  });
+
+  final bool enabled;
+
+  /// Hex color string, e.g. "#3D5AFE". Invalid values fall back to
+  /// #3D5AFE in the widget (see NewsRibbon.parseColor).
+  final String color;
+
+  /// Centered white text; empty = solid colored bar with no text.
+  final String text;
+
+  /// Bar height in logical pixels.
+  final double height;
+
+  factory RibbonConfig.fromJson(Map<String, dynamic> j) {
+    final color = (j['color'] ?? '').toString().trim();
+    final height = (j['height'] as num?)?.toDouble() ?? 36;
+    return RibbonConfig(
+      enabled: j['enabled'] != false,
+      color: color.isEmpty ? '#3D5AFE' : color,
+      text: (j['text'] ?? '').toString(),
+      height: height <= 0 ? 36 : height,
+    );
+  }
+}
+
 /// TTS behaviour controlled from the website — no rebuild needed.
 /// Gemini API keys are NEVER in the app or this config: they live
 /// server-side in the TTS proxy Worker only.
@@ -257,6 +293,7 @@ class RemoteConfig {
     this.feeds = const FeedsConfig(),
     this.splash = const SplashConfig(),
     this.tickerDirection = 'from_left',
+    this.ribbon = const RibbonConfig(),
   });
 
   /// Master switch for ALL Unity ads.
@@ -290,6 +327,9 @@ class RemoteConfig {
   /// moves right; the Nigraan Urdu-ticker house style) or 'from_right'
   /// (old direction). Changeable from the website, no rebuild.
   final String tickerDirection;
+
+  /// Ribbon bar under the Home news ticker (remote-controlled).
+  final RibbonConfig ribbon;
 
   bool bannerEnabled(String zone) => adsEnabled && (banners[zone] == true);
 
@@ -381,6 +421,9 @@ class RemoteConfig {
                       'from_left'))
           ? (j['ticker'] as Map<String, dynamic>)['direction'] as String
           : 'from_left',
+      ribbon: j['ribbon'] is Map<String, dynamic>
+          ? RibbonConfig.fromJson(j['ribbon'] as Map<String, dynamic>)
+          : const RibbonConfig(),
     );
   }
 }

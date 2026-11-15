@@ -18,6 +18,24 @@ class AppStrings {
     'news_briefing': {'en': 'News Briefing', 'ur': 'نیوز بریفنگ'},
     'speech_writer': {'en': 'Speech Writer', 'ur': 'تقریر لکھیں'},
     'mp3_converter': {'en': 'MP3 Converter', 'ur': 'ایم پی تھری کنورٹر'},
+    'audio_video_tools': {
+      'en': 'Audio & Video Tools',
+      'ur': 'آواز و ویڈیو ٹولز',
+    },
+    'caption_generator': {
+      'en': 'AI Caption Generator',
+      'ur': 'اے آئی کیپشن جنریٹر',
+    },
+    'video_caption_maker': {
+      'en': 'Video Caption Maker (AI)',
+      'ur': 'ویڈیو کیپشن میکر (اے آئی)',
+    },
+    'not_enough_coins_captions': {
+      'en':
+          'Not enough coins — open the Coins tab and watch ads to earn more.',
+      'ur':
+          'کوائنز کم ہیں — کوائنز ٹیب کھولیں اور اشتہار دیکھ کر مزید کمائیں۔',
+    },
     'type_text': {
       'en': 'Type or paste your text here…',
       'ur': 'یہاں اپنا متن لکھیں یا پیسٹ کریں…',

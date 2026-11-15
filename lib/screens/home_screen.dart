@@ -7,9 +7,11 @@ import '../services/coins_service.dart';
 import '../services/remote_config_service.dart';
 import '../services/rss_service.dart';
 import '../services/updater_service.dart';
+import '../widgets/news_ribbon.dart';
 import '../widgets/news_ticker.dart';
 import 'article_listen_screen.dart';
 import 'article_webview_screen.dart';
+import 'audio_video_tools_screen.dart';
 import 'briefing_screen.dart';
 import 'converter_screen.dart';
 import 'speech_writer_screen.dart';
@@ -106,6 +108,19 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
       _Tool(
+        icon: Icons.video_library,
+        label: AppStrings.tr('audio_video_tools', locale),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AudioVideoToolsScreen(
+              coins: coins,
+              library: library,
+              appLocale: appLocale,
+            ),
+          ),
+        ),
+      ),
+      _Tool(
         icon: Icons.library_music,
         label: AppStrings.tr('my_audio', locale),
         onTap: () => onOpenTab(3),
@@ -160,6 +175,9 @@ class HomeScreen extends StatelessWidget {
             ),
             // Live news ticker (RSS feed, refreshes every 5 min).
             NewsTicker(onTapArticle: (a) => _openArticle(context, a)),
+            // Remote-controlled ribbon directly under the ticker
+            // (audio-box.json `ribbon`; empty text = solid bar).
+            const NewsRibbon(),
             // Sponsored ad card — TJ Earn rule: only when enabled AND
             // title AND action_url are both non-empty.
             ValueListenableBuilder<RemoteConfig>(

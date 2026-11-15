@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'screens/login_screen.dart';
 import 'screens/main_shell.dart';
 import 'screens/splash_screen.dart';
 import 'services/audio_library_service.dart';
 import 'services/coins_service.dart';
+import 'services/google_auth_service.dart';
 import 'services/remote_config_service.dart';
 import 'theme.dart';
 
@@ -78,7 +80,7 @@ class _AudioBoxAppState extends State<AudioBoxApp> {
           supportedLocales: const [Locale('en'), Locale('ur')],
           theme: AudioBoxTheme.light,
           home: _started
-              ? MainShell(
+              ? _AuthGate(
                   coins: widget.coins,
                   library: widget.library,
                   appLocale: appLocale,
@@ -89,6 +91,53 @@ class _AudioBoxAppState extends State<AudioBoxApp> {
                 ),
         );
       },
+    );
+  }
+}
+
+/// Login gate (v1.0.3): after the splash, MainShell opens only when a
+/// Google-linked Supabase session exists (restored by the SDK, or just
+/// signed in). Otherwise the login screen shows — before MainShell and
+/// before any coin feature. The check is synchronous: Supabase init
+/// already ran during the splash, so the restored session is in memory.
+class _AuthGate extends StatefulWidget {
+  final CoinsService coins;
+  final AudioLibraryService library;
+  final ValueNotifier<Locale> appLocale;
+  final Future<void> Function(Locale) onLocaleChanged;
+
+  const _AuthGate({
+    required this.coins,
+    required this.library,
+    required this.appLocale,
+    required this.onLocaleChanged,
+  });
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  late bool _signedIn;
+
+  @override
+  void initState() {
+    super.initState();
+    _signedIn = GoogleAuthService.isSignedIn;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_signedIn) {
+      return MainShell(
+        coins: widget.coins,
+        library: widget.library,
+        appLocale: widget.appLocale,
+        onLocaleChanged: widget.onLocaleChanged,
+      );
+    }
+    return LoginScreen(
+      onSignedIn: () => setState(() => _signedIn = true),
     );
   }
 }

@@ -15,34 +15,72 @@ import 'remote_config_service.dart';
 /// folder. If ads are off in the remote config, or no ad is available
 /// right now, the file downloads directly — the user is never blocked
 /// from their own audio. If the user skips the ad, nothing downloads.
+///
+/// ONE ad flow only: [_playRewardedAdGate] is the single gate every
+/// download path goes through — saved audio ([downloadWithAd]), raw
+/// bytes such as a generated SRT file ([downloadBytesWithAd]), and the
+/// MP3 Converter's converted-file download. No second ad flow exists.
 class AudioDownloadService {
+  /// The single rewarded-ad gate. Returns true when the download may
+  /// proceed (ad completed, or ads off / no ad loaded — fail-soft),
+  /// false when the user skipped the ad (nothing is delivered).
+  static Future<bool> _playRewardedAdGate(BuildContext context) async {
+    final adsOn = UnityAdsService.adsEnabledNow &&
+        RemoteConfigService.instance.config.rewardedEnabled &&
+        UnityAdsService.adsConfigured;
+    if (!adsOn) return true;
+    await UnityAdsService.init();
+    final loaded = await UnityAdsService.loadRewardedAd();
+    if (!loaded) return true; // No ad available — deliver anyway.
+    final result = await UnityAdsService.showRewardedAd();
+    if (result != UnityAdResult.completed) {
+      if (!context.mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Watch the full ad to download the file.'),
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
   static Future<void> downloadWithAd(
     BuildContext context,
     AudioItem item,
   ) async {
-    final adsOn = UnityAdsService.adsEnabledNow &&
-        RemoteConfigService.instance.config.rewardedEnabled &&
-        UnityAdsService.adsConfigured;
-    if (adsOn) {
-      await UnityAdsService.init();
-      final loaded = await UnityAdsService.loadRewardedAd();
-      if (loaded) {
-        final result = await UnityAdsService.showRewardedAd();
-        if (result != UnityAdResult.completed) {
-          if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Watch the full ad to download the audio.'),
-            ),
-          );
-          return;
-        }
-      }
-      // Not loaded: no ad available right now — download anyway
-      // (fail-soft, never punish the user for a missing ad).
-    }
+    if (!await _playRewardedAdGate(context)) return;
     if (!context.mounted) return;
     await downloadDirect(context, item);
+  }
+
+  /// Download arbitrary bytes (e.g. a generated .srt caption file) to
+  /// the phone's Download folder, through the SAME one-ad gate as
+  /// [downloadWithAd]: 1 rewarded ad, then the file saves; fail-soft
+  /// when ads are off or no ad loads; skip = no delivery.
+  static Future<void> downloadBytesWithAd(
+    BuildContext context, {
+    required String fileName,
+    required List<int> bytes,
+  }) async {
+    if (!await _playRewardedAdGate(context)) return;
+    if (!context.mounted) return;
+    try {
+      final extDir = await getExternalStorageDirectory();
+      final downloads = Directory('${extDir?.path}/Download');
+      if (!await downloads.exists()) await downloads.create(recursive: true);
+      final target = File('${downloads.path}/$fileName');
+      await target.writeAsBytes(bytes);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved to ${target.path}')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Download failed: $e')),
+      );
+    }
   }
 
   static Future<void> downloadDirect(

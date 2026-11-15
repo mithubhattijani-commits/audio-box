@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'ads_service.dart';
+import 'google_auth_service.dart';
 import 'remote_config_service.dart';
 import 'supabase_service.dart';
 
@@ -8,7 +9,9 @@ import 'supabase_service.dart';
 /// screen, with progress 0.0-1.0 for the 1-100% loading count.
 ///
 /// Same order as the old MainShell startup (TJ Earn pattern):
-/// remote config cache, Supabase anonymous sign-in, Unity init.
+/// remote config cache, Supabase init (NO auto anonymous sign-in
+/// since v1.0.3 — the login gate requires a Google-linked session),
+/// Google sign-in pre-warm, Unity init.
 /// Every step is best-effort and never throws, so a slow or offline
 /// start still reaches the app. The in-app update check is NOT here:
 /// it shows a dialog, so it still runs from MainShell, whose context
@@ -43,6 +46,17 @@ class AppStartup {
       await SupabaseService.init();
     } catch (_) {
       // Local-only mode: coins stay on-device.
+    }
+    // Google sign-in pre-warm (silent restore only; the login gate
+    // decides from the Supabase session). No-op until the Web OAuth
+    // client ID is supplied in AppConfig.
+    try {
+      await GoogleAuthService.ensureInitialized().timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => false,
+          );
+    } catch (_) {
+      // Google unavailable — the login screen explains and retries.
     }
     report(0.55, 'Loading ads...');
     try {

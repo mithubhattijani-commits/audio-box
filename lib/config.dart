@@ -25,6 +25,27 @@ class AppConfig {
   static bool get isConfigured =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 
+  /// Google Sign-In — Web OAuth client ID (the `serverClientId`).
+  ///
+  /// Set 15 Nov 2026 from the Google Cloud OAuth setup (project
+  /// "Audio Box" audio-box-514810, Web client "Audio Box Web").
+  /// Override at build time instead if ever needed:
+  /// `--dart-define=GOOGLE_SERVER_CLIENT_ID=<web client id>`.
+  /// NEVER guess this value — without the real one, Google returns no
+  /// ID token and sign-in cannot complete.
+  ///
+  /// NO google-services.json is needed: google_sign_in 7 reads this
+  /// value from `GoogleSignIn.instance.initialize(serverClientId: ...)`.
+  /// (google-services.json is only a fallback source for the same ID,
+  /// and is required only by Firebase, which this app does not use.)
+  /// The Android OAuth client (package com.nigraantv.audiobox + the
+  /// release SHA-1) must exist in the same Google Cloud project, or
+  /// Android sign-in fails with a developer-configuration error.
+  static const googleServerClientId = String.fromEnvironment(
+    'GOOGLE_SERVER_CLIENT_ID',
+    defaultValue: '1070324533167-6kcjv44or3l8lkij2ou1qkl398p800ka.apps.googleusercontent.com',
+  );
+
   /// Nigraan TV TTS proxy (public Cloudflare Worker, no key in the app).
   /// DEFAULT only — the remote config (tts.proxy_url) overrides this at
   /// runtime, so the proxy can change without a rebuild.

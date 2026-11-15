@@ -2,7 +2,7 @@ name: audio_box
 description: "Audio Box From Jaani — text-to-speech studio by Nigraan TV. Type text, get audio (Gemini + Edge voices), earn coins by watching Unity rewarded ads."
 publish_to: 'none'
 
-version: 1.0.2+3
+version: 1.0.3+4
 
 environment:
   sdk: ^3.13.7
@@ -27,6 +27,19 @@ dependencies:
   url_launcher: ^6.2.5
   # Installed versionCode for the update check.
   package_info_plus: ^8.3.0
+  # Google sign-in (v1.0.3): coins are tied to a real Google account.
+  # v7 is a singleton: GoogleSignIn.instance.initialize(serverClientId:)
+  # then .authenticate(); no web redirect / deep-link scheme needed.
+  # Latest stable 7.2.0 (min Dart 3.7); project SDK is ^3.13.7.
+  google_sign_in: ^7.2.0
+  # Audio & Video tools (v1.0.3 batch 2): pick audio/video files for
+  # the caption tools, and play picked videos with a caption preview.
+  # Caret ranges so `flutter pub get` resolves the newest release that
+  # still satisfies this project's SDK: file_picker 13.x needs Flutter
+  # 3.38+, so the 8.x line is the safe floor here; video_player 2.10.x
+  # is the verified-stable line (2.14.x is current as of Nov 2026).
+  file_picker: ^8.0.0
+  video_player: ^2.10.1
   # Full article pages in-app (real page, website banner ads included).
   webview_flutter: ^4.8.0
 

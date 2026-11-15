@@ -9,7 +9,15 @@ audio generation.
 - App name: **Audio Box From Jaani**
 - Developer: Nigraan TV
 - Default language: English, Urdu second (same as nigraantv.xyz)
-- Version: 1.0.0+1
+- Version: 1.0.3+4
+- **v1.0.3 (15 Nov 2026): Google sign-in required — coins are tied to a real Google account** (anonymous sessions are linked onto the same user, so existing coins survive; see "Supabase" below). Login screen appears before the app until a Google-linked session exists.
+- **v1.0.3: remote-controlled ribbon bar under the Home news ticker** (`ribbon` block in `audio-box.json`: enabled / color / text / height; empty text = solid bar).
+- **v1.0.3 batch 2 (15 Nov 2026): Audio & Video tools** — a dark RTL
+  "آواز و ویڈیو ٹولز" screen (Home tools grid) with 4 cards: Text to
+  Speech + Audio Converter (existing screens, linked) and two NEW
+  caption tools — AI Caption Generator and Video Caption Maker (AI) —
+  both transcribing via the proxy's new `POST /transcribe`. See
+  "Audio & Video tools" below.
 
 ## The strategy (read this first)
 
@@ -34,6 +42,7 @@ users to website articles:
 |---|---|
 | Daily free claim (once per day) | +100 |
 | One audio generation (~1 minute chunk) | −50 (coins per minute, remote config) |
+| One caption transcription (~1 minute of media) | −50 (same coins-per-minute rate, rounded up to whole minutes, min 50) |
 | Watch rewarded ads (one tap, ads back-to-back) | +50 for 2 ads (default option) |
 
 - Rewarded options come from the remote config — new options are addable
@@ -108,7 +117,8 @@ launch (the Unity SDK initialises once at startup).
     "briefing_mp3_url": "https://nigraantv.xyz/briefing.mp3"
   },
   "splash": { "image_url": "" },
-  "ticker": { "direction": "from_left" }
+  "ticker": { "direction": "from_left" },
+  "ribbon": { "enabled": true, "color": "#3D5AFE", "text": "", "height": 36 }
 }
 ```
 
@@ -141,6 +151,11 @@ Rules:
   left, moves right — the Nigraan Urdu-ticker house style) or
   `'from_right'` (old direction). Applies within seconds while the app
   is online, no rebuild.
+- `ribbon` — the bar directly under the Home news ticker (above the
+  sponsored card). `enabled` (default true), `color` hex (default
+  `"#3D5AFE"`, invalid hex falls back to `#3D5AFE`), `text` (default
+  `""` = solid bar only; non-empty = centered white text), `height`
+  in pixels (default 36). Changeable from the website, no rebuild.
 - **Version is NOT in this config.** Version checks use the separate fixed
   URL below — one source of truth, same as TJ Earn.
 
@@ -232,6 +247,120 @@ inside the app itself — no more chat links to install.
   directly; if the user skips the ad, nothing downloads. See
   `lib/services/audio_download_service.dart`.
 
+## Audio & Video tools (v1.0.3 batch 2)
+
+Home tools grid → **Audio & Video Tools** (`lib/screens/audio_video_tools_screen.dart`):
+dark theme, RTL layout, header "آواز و ویڈیو ٹولز", section label
+"AUDIO & VIDEO", 4 dark cards (dark-red icon square, English title +
+Urdu subtitle). One Unity banner, zone `tools`.
+
+| Card | Opens |
+|---|---|
+| Text to Speech — متن کو آواز میں بدلیں | Existing TTS Studio screen |
+| Audio Converter — آڈیو کو WAV میں بدلیں | Existing MP3 Converter screen |
+| AI Caption Generator — ویڈیو کے خودکار کیپشنز | NEW `caption_generator_screen.dart` |
+| Video Caption Maker (AI) — ویڈیو فائل کی آواز سے خودکار کیپشن + کیپشن والی ویڈیو | NEW `video_caption_maker_screen.dart` |
+
+**AI Caption Generator** — pick an audio/video file (`file_picker`;
+mp3/wav/m4a/aac/ogg/flac/mp4/mov/mkv/webm/m4v), transcribe via
+`POST /transcribe`, show captions with timestamps, copy them, save
+as SRT. **Video Caption Maker (AI)** — pick a video (`file_picker`,
+video types), same transcription, captions list + SRT download +
+in-player caption preview: the video plays (`video_player`) with the
+current caption line overlaid at the bottom, synced to playback
+position (play/pause + seek slider).
+
+**Coins (both caption tools, identical):** 50 coins per minute of
+media — same rate as TTS generation (`tts.coins_per_minute`, remote
+config, default 50), rounded UP to whole minutes, minimum 50 coins.
+Charged through the EXISTING `audiobox-spend-coins` function BEFORE
+transcribing (`CaptionService.transcribeCharged`); if transcription
+then fails, the spend is refunded in full. Too few coins → a message
+pointing the user to the Coins tab (watch ads to earn). Duration comes
+from the file itself (video_player for video, audioplayers/WAV header
+for audio, file-size estimate as a last resort); the cost preview
+shows before the user taps Transcribe.
+
+**Ads (both caption tools, identical):** the SRT file delivery goes
+through the EXISTING `AudioDownloadService` one-ad gate
+(`downloadBytesWithAd`, same private gate as `downloadWithAd` — no
+second ad flow): 1 rewarded video ad plays, then the `.srt` saves to
+the phone's Download folder; fail-soft when ads are off or no ad
+loads; if the user skips the ad, nothing is delivered. Copying
+captions is free (no ad). Viewing the captions and the in-player
+preview costs no ad.
+
+**MP3 Converter delivery (v1.0.3 batch 2):** conversion itself is
+still free (Edge re-generation, no coins, no ad). Downloading a
+converted MP3 now goes through the existing
+`AudioDownloadService.downloadWithAd` — the converter screen lists
+its MP3 files with a Download button each (1 rewarded ad, then the
+file saves; fail-soft; skip = no delivery). No second ad flow was
+written: the gate lives in one private helper (`_playRewardedAdGate`)
+shared by `downloadWithAd` and `downloadBytesWithAd`.
+
+**HONEST LIMIT — NO BURN-IN (follow-up):** neither caption tool
+burns captions INTO the video file. Burning captions into video needs
+server-side ffmpeg, which Cloudflare Workers cannot run. What ships
+in v1.0.3 is captions + SRT file + in-player preview only. A
+burned-in captioned video file needs a server with ffmpeg (a small
+transcode service or a VPS/worker with ffmpeg) — that is a separate
+infrastructure follow-up, not part of this build.
+
+## POST /transcribe (TTS proxy Worker)
+
+`POST https://nigraan-tv-tts-proxy.mithubhattijani.workers.dev/transcribe`
+— added to `~/workspace/nigraan-tv/tts-proxy/worker.js` (NOT deployed
+yet — the coordinator deploys it). Same CORS rules and the same
+4-key Gemini rotation pattern as `POST /tts`. **No Gemini key is ever
+in the app** — keys stay server-side in the Worker only.
+
+**Request — base64 JSON (what the app sends):**
+
+```json
+{
+  "audio": "<base64 audio/video bytes>",
+  "mime_type": "audio/mpeg",
+  "file_name": "clip.mp3",
+  "lang": "ur",
+  "duration_seconds": 132
+}
+```
+
+`lang` is `ur` or `en` (default `ur`); `duration_seconds` is optional.
+**Multipart is also accepted** (form field `file`, optional fields
+`lang` / `duration_seconds`) for non-app clients.
+
+**Response (200):**
+
+```json
+{
+  "segments": [
+    {"start": 1.0, "end": 4.5, "text": "Hello world"}
+  ],
+  "srt": "1\n00:00:01,000 --> 00:00:04,500\nHello world\n\n",
+  "duration_seconds": 132,
+  "file_name": "clip.mp3",
+  "model": "gemini-3.8-flash",
+  "language": "ur"
+}
+```
+
+**How it works:** the Worker sends the audio to a Gemini model
+(`gemini-3.8-flash`, fallback `gemini-3.8-flash-lite`, same key
+rotation as `/tts`, temperature 0) with a prompt asking for SRT-format
+output only; the response is parsed and validated as SRT. If the
+model returns plain text instead, the Worker splits it into timed
+caption chunks as a fallback (sentences spread evenly over the known
+duration, ~5s each when the duration is unknown).
+
+**Limits:** max file **25 MB** (413 `file too large (max 25 MB)`),
+max audio **10 minutes** (400 `audio too long (max 10 minutes)` when
+`duration_seconds` is supplied and exceeds 600). Errors: 400 invalid
+input, 413 too large, 500 server not configured (no keys), 502
+transcription failed (all keys/models exhausted — `detail` names the
+last model error).
+
 ## MP3 Converter
 
 There is no light on-device WAV→MP3 encoder, so v1 converts by
@@ -244,32 +373,39 @@ A future option is an ffmpeg-based encoder (heavy, ~30 MB+); not in v1.
 
 | Screen | What it does |
 |---|---|
-| Home | Live ticker, announcement, sponsored card, balance, tools grid, latest articles |
+| Login | Google sign-in gate (v1.0.3): one "Sign in with Google" button; shown before MainShell until a Google-linked session exists |
+| Home | Live ticker, ribbon, announcement, sponsored card, balance, tools grid, latest articles |
 | TTS Studio | Text → audio (voice picker, Urdu/English, cost preview, player) |
 | Coins | Balance, daily 100 claim, rewarded options from config |
 | My Audio | Saved audios: play, download, share, convert to MP3, delete |
 | Article Listen | RSS articles; Read (free, WebView) / Listen (normal coin cost) |
 | News Briefing | Hourly briefing audio (`briefing.json` + `briefing.mp3`), free |
 | Speech Writer | Topic → easy Urdu speech (v1: local templates), send to TTS Studio |
-| MP3 Converter | Convert saved WAV audios to MP3 (Edge re-generation) |
+| MP3 Converter | Convert saved WAV audios to MP3 (Edge re-generation) — conversion free; Download of a converted MP3 plays 1 rewarded ad, then saves |
+| Audio & Video Tools | Dark RTL 4-card screen: TTS + Converter (existing) + AI Caption Generator + Video Caption Maker (AI) |
+| AI Caption Generator | Audio/video file → timed captions, copy, Save SRT (1 ad); 50 coins/min, charged before transcribing |
+| Video Caption Maker (AI) | Video file → captions + SRT + in-player synced caption preview; 50 coins/min; NO burn-in (needs server ffmpeg — follow-up) |
 
 Every screen has a passive Unity banner (bottom, 50px, never covering
 content/buttons), gated by its zone key + the master switch. AppOpen ad
 on cold start when `app_open_ad.enabled`.
 
-## Unity setup (TODO before any public build)
+## Unity setup (DONE 15 Nov 2026 — live)
 
-1. Create a NEW Unity project **"Audio Box From Jaani"** at
-   https://cloud.unity.com — do NOT reuse TJ Earn's Game ID (800417967).
-2. Create placements: Rewarded (e.g. `BP_Rewarded_Android`), Banner
-   (e.g. `BP_Banner_Android`), App Open (e.g. `BP_AppOpen_Android`).
-3. In `lib/services/ads_service.dart` replace the three `REPLACE_ME`
-   constants with the real IDs and set `testMode = false`.
-4. Until then the app runs with ads safely inert (no crash, no empty
-   banner space) — the banner widget renders nothing and the Coins
-   screen explains ads are being set up.
+1. Unity project **"Audio Box From Jaani"** (org TJ Earn) — Game ID
+   **800438808**. Placements: Rewarded `BP_Rewarded_Android`, Banner
+   `BP_Banner_Android`, App Open `BP_Interstitial_Android` (dashboard
+   has no separate App Open format — same as TJ Earn).
+2. Game ID + placement IDs come from the remote config
+   (`audio-box.json`, `unity` block) — changing them needs NO rebuild.
+   The bundled defaults in `remote_config_service.dart` are the same
+   live values, so ads keep working even if the config is unreachable.
+   `testMode = false` in `lib/services/ads_service.dart`.
+3. If the IDs were ever unset, the app runs with ads safely inert
+   (no crash, no empty banner space) — the banner widget renders
+   nothing and the Coins screen explains ads are being set up.
 
-## Supabase (follow-up: deploy the functions)
+## Supabase (functions deployed live 15 Nov 2026)
 
 - Project: **tj-earn** (`https://znyaxxkhhopdqrvxhxmb.supabase.co`, same
   project as TJ Earn). The app uses the same public anon key as TJ Earn,
@@ -277,9 +413,27 @@ on cold start when `app_open_ad.enabled`.
   `--dart-define=SUPABASE_ANON_KEY=<same value as TJ Earn>`.
   The URL has a built-in default; the anon key must be supplied or the
   app runs local-only (coins on-device, clearly stated in the UI).
-- Auth: **anonymous sign-in** (no email/password in v1). Enable
-  "Anonymous sign-ins" in Supabase Auth → Providers before using the
-  server ledger.
+- Auth: **Google sign-in (v1.0.3, native flow)** — `google_sign_in`
+  v7 (`GoogleSignIn.instance`, `initialize(serverClientId: <Web OAuth
+  client ID>)` → `authenticate()` → ID token + access token) →
+  Supabase `signInWithIdToken(provider: google)` / `linkIdentityWithIdToken`.
+  No web OAuth redirect, no deep-link scheme, no `google-services.json`
+  (the Web client ID lives in `lib/config.dart` as
+  `googleServerClientId` — set 15 Nov 2026 from the Google Cloud
+  OAuth setup, project "Audio Box"; see "Google OAuth setup" below).
+  The Android
+  OAuth client (package `com.nigraantv.audiobox` + release SHA-1) must
+  exist in the same Google Cloud project.
+- Anonymous sign-in is NO LONGER automatic: it happens ONLY as the
+  pre-link step (sign in anonymously, then immediately link Google
+  onto the same user, preserving `user.id` and coins). The login gate
+  (`lib/screens/login_screen.dart`, via `_AuthGate` in `main.dart`)
+  blocks MainShell and all coin features until a Google-linked session
+  exists; cancel/failure shows a message and stays on the login screen.
+- Supabase dashboard prerequisites: enable **"Anonymous sign-ins"**
+  AND **"Enable Manual Linking"** (Auth → Providers) — without manual
+  linking, `linkIdentityWithIdToken` fails and a Google sign-in creates
+  a fresh user instead of preserving the anonymous user's coins.
 - Edge Functions in `supabase/functions/` (code ready, NOT deployed yet):
   `audiobox-daily-coins`, `audiobox-claim-ad-reward`,
   `audiobox-spend-coins`, `audiobox-get-balance` (+ `_shared/cors.ts`).
@@ -292,6 +446,22 @@ on cold start when `app_open_ad.enabled`.
 - v1 behaviour: local balance is the source of truth in the UI; every
   local change is also sent to the server (best-effort) and the server
   balance wins on sync once the functions are live.
+
+## Google OAuth setup (done 15 Nov 2026 — live values in lib/config.dart)
+
+1. In Google Cloud Console, create TWO OAuth 2.0 clients in one project:
+   - **Web application** — its client ID is already in `lib/config.dart`
+     (`AppConfig.googleServerClientId`; override with
+     `--dart-define=GOOGLE_SERVER_CLIENT_ID=<web client id>` if needed).
+   - **Android** — package `com.nigraantv.audiobox`, SHA-1
+     `F3:72:E2:D9:7A:EF:FC:1B:A7:34:AC:FD:BA:3A:8C:D0:BC:70:BF:05`
+     (release keystore). Without it, Android sign-in fails with a
+     developer-configuration error. (Also add an Android client for the
+     debug key SHA-1 if debug builds must sign in.)
+2. In Supabase Dashboard → Auth → Providers: enable **Google** with
+   the SAME Web client ID + client secret, and turn on **"Enable
+   Manual Linking"** (linking the anonymous user fails without it).
+3. No `google-services.json` and no Gradle plugin change are needed.
 
 ## Build
 
@@ -316,8 +486,8 @@ outside the repo; never commit it.
 
 ```
 pubspec.yaml                  deps (same versions as TJ Earn + audioplayers, url_launcher, package_info_plus, webview_flutter)
-lib/main.dart                 entry: locale, coins preload, MainShell
-lib/config.dart               public URLs + --dart-define config
+lib/main.dart                 entry: locale, coins preload, login gate (_AuthGate), MainShell
+lib/config.dart               public URLs + --dart-define config + Google Web client ID
 lib/theme.dart                Nigraan red #EF0017 / blue #3D5AFE
 lib/l10n/strings.dart         EN/UR strings (English default)
 lib/models/                   tts_voice.dart, audio_item.dart
@@ -327,13 +497,20 @@ lib/services/
   ads_service.dart            Unity init/rewarded/AppOpen + zone-gated banner widget
   remote_config_service.dart  audio-box.json: cache -> network, 60s poll
   updater_service.dart        fixed version URL check (TJ Earn pattern)
-  supabase_service.dart       init, anonymous auth, function invokes
+  supabase_service.dart       init (no auto-anon since v1.0.3), Google link/sign-in helpers, function invokes
+  google_auth_service.dart    native Google sign-in + link-first flow, login-gate check
   audio_library_service.dart  on-device audio library + MP3 conversion
   briefing_service.dart       briefing.json (defensive parse)
   rss_service.dart            rss.xml fetch/parse + relative time
+  caption_service.dart        POST /transcribe client, SRT build helpers,
+                              coin cost (50/min, round up, min 50), charge-then-transcribe with refund
+  audio_download_service.dart one rewarded-ad gate (_playRewardedAdGate) shared by
+                              downloadWithAd (audio) + downloadBytesWithAd (SRT/bytes)
 lib/screens/                  main_shell, home, tts, coins, my_audio, converter,
-                              article_listen, article_webview, briefing, speech_writer
-lib/widgets/                  audio_player_bar, news_ticker
+                              article_listen, article_webview, briefing, speech_writer,
+                              login_screen, audio_video_tools_screen,
+                              caption_generator_screen, video_caption_maker_screen
+lib/widgets/                  audio_player_bar, news_ticker, news_ribbon
 android/                      package com.nigraantv.audiobox, launcher icon
 supabase/functions/           audiobox-daily-coins, audiobox-claim-ad-reward,
                               audiobox-spend-coins, audiobox-get-balance
@@ -345,16 +522,32 @@ supabase/functions/           audiobox-daily-coins, audiobox-claim-ad-reward,
 - No Flutter SDK on the build VM: code is written against the verified
   plugin APIs (same versions as TJ Earn) but **not compiled yet** — run
   `flutter analyze` + the CI build first; fix whatever it reports.
+  New in batch 2: `file_picker` (^8.0.0 caret) + `video_player`
+  (^2.10.1 caret) — caret ranges so pub resolves the newest release
+  the project SDK allows (file_picker 13.x needs Flutter 3.38+, so it
+  is deliberately NOT pinned). The Worker `/transcribe` code WAS
+  verified: `node --check` passes and a stubbed-Gemini harness
+  confirmed routing, validation, SRT parsing, the plain-text fallback
+  and multipart upload — but it has NOT been deployed or tested
+  against live Gemini yet.
+- **Burn-in follow-up (not in v1.0.3):** burning captions INTO a video
+  file needs server-side ffmpeg, which Cloudflare Workers cannot run.
+  The caption tools ship captions + SRT + in-player preview only. A
+  captioned-video download needs a transcode server (ffmpeg on a VPS
+  or a container service) — separate infrastructure work.
 - Update download opens the APK URL in the browser (see "In-app update").
 - Release builds are signed with the permanent key (see "Build") — the
   first release-signed build (v1.0.1) needs a one-time uninstall of any
   debug-signed install, because Android refuses to update an app when
   the signing key changes. After that, in-app updates install directly.
-- Supabase Edge Functions written but not deployed; anonymous sign-ins
-  must be enabled in the dashboard first.
-- Unity Game ID + placements are `REPLACE_ME` (see "Unity setup").
-- `audio-box.json` and `audio-box-version.json` do not exist on the
-  website yet — create them (schemas above) as a follow-up step.
+- Supabase Edge Functions deployed live 15 Nov 2026 (all 4 on tj-earn);
+  Google provider enabled with Manual Linking ON, anonymous sign-ins
+  still ON (pre-link step — see "Supabase" above).
+- Unity Game ID + placements come from the remote config
+  (`audio-box.json`); bundled defaults are the live values (see
+  "Unity setup").
+- `audio-box.json` and `audio-box-version.json` are live on the website
+  since 15 Nov 2026 (schemas above).
 - Article Listen reads title + RSS excerpt (full article bodies live in
   the site SPA; full-text fetch is a follow-up).
 - Speech Writer uses local templates in v1 (AI-written speeches later).

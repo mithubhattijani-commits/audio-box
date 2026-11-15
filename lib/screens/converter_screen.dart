@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/strings.dart';
 import '../services/ads_service.dart';
+import '../services/audio_download_service.dart';
 import '../services/audio_library_service.dart';
 
 /// MP3 Converter (zone: converter).
@@ -12,6 +13,13 @@ import '../services/audio_library_service.dart';
 /// MP3 of the same text (same-gender Edge voice). Conversion itself is
 /// free (Edge voices are free); long texts convert into one MP3 per
 /// 550-char part.
+///
+/// DELIVERY (v1.0.3 batch 2): downloading a converted MP3 to the
+/// phone's Download folder goes through the SAME one-ad gate as every
+/// other download — AudioDownloadService.downloadWithAd (1 rewarded
+/// video ad, then the file saves; fail-soft when ads are off or no ad
+/// loads; skip = no delivery). Conversion itself stays free and
+/// ungated; only the file delivery is gated.
 class ConverterScreen extends StatefulWidget {
   final AudioLibraryService library;
 
@@ -44,7 +52,8 @@ class _ConverterScreenState extends State<ConverterScreen> {
         done++;
       }
       if (mounted) {
-        setState(() => _message = 'Converted $done audio(s) to MP3.');
+        setState(() => _message = 'Converted $done audio(s) to MP3. '
+            'Use Download on an MP3 below to save it (1 ad).');
       }
     } catch (e) {
       if (mounted) {
@@ -70,7 +79,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Converts your saved WAV audio into MP3 files by re-generating the same words with Asad / Uzma. Conversion is free — no coins.',
+              'Converts your saved WAV audio into MP3 files by re-generating the same words with Asad / Uzma. Conversion is free — no coins. Downloading a converted MP3 plays 1 rewarded ad first, then saves it to Downloads.',
             ),
             const SizedBox(height: 16),
             Text(
@@ -114,7 +123,8 @@ class _ConverterScreenState extends State<ConverterScreen> {
                             await widget.library.convertToMp3(item);
                             if (mounted) {
                               setState(() {
-                                _message = 'Converted to MP3.';
+                                _message = 'Converted to MP3. '
+                                    'Use Download on the MP3 below to save it (1 ad).';
                                 _converting = false;
                               });
                             }
@@ -130,6 +140,29 @@ class _ConverterScreenState extends State<ConverterScreen> {
                   child: const Text('Convert'),
                 ),
               ),
+            // Converted MP3s: delivery (Download to the phone's
+            // Downloads folder) goes through the one-ad gate —
+            // downloadWithAd: 1 rewarded ad, then the file saves;
+            // fail-soft when ads are off / no ad; skip = no delivery.
+            if (mp3Items.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'MP3 files — Download plays 1 ad, then saves:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              for (final item in mp3Items)
+                ListTile(
+                  leading: const Icon(Icons.audio_file),
+                  title: Text(item.displayTitle),
+                  subtitle: Text(item.voiceId),
+                  trailing: TextButton.icon(
+                    onPressed: () =>
+                        AudioDownloadService.downloadWithAd(context, item),
+                    icon: const Icon(Icons.download, size: 18),
+                    label: const Text('Download'),
+                  ),
+                ),
+            ],
           ],
         ),
       ),
