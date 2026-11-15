@@ -443,12 +443,17 @@ class RemoteConfigService {
           .get(Uri.parse(_url))
           .timeout(_fetchTimeout);
       if (res.statusCode != 200) return;
-      final decoded = jsonDecode(res.body);
+      // ENCODING FIX (15 Nov 2026): same as RssService — the site sends
+      // no charset, so res.body would decode UTF-8 (e.g. an Urdu
+      // announcement) as Latin-1 mojibake. Decode the raw bytes as
+      // UTF-8 ourselves, and cache the correctly-decoded text.
+      final body = utf8.decode(res.bodyBytes);
+      final decoded = jsonDecode(body);
       if (decoded is! Map<String, dynamic>) return;
       notifier.value = RemoteConfig.fromJson(decoded);
       try {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_cacheKey, res.body);
+        await prefs.setString(_cacheKey, body);
       } catch (_) {
         // Cache write is best-effort.
       }
