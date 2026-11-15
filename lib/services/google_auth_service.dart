@@ -69,9 +69,13 @@ class GoogleAuthService {
         // Silent restore of the previously chosen Google account.
         // Its result is intentionally ignored: the Supabase session
         // decides the gate, and a tap re-authenticates if needed.
-        await GoogleSignIn.instance
-            .attemptLightweightAuthentication()
-            .timeout(const Duration(seconds: 10));
+        // attemptLightweightAuthentication() returns a nullable
+        // Future in google_sign_in 7.x, so guard the .timeout call.
+        final pending =
+            GoogleSignIn.instance.attemptLightweightAuthentication();
+        if (pending != null) {
+          await pending.timeout(const Duration(seconds: 10));
+        }
       } catch (_) {
         // No previous Google account (or offline) — the sign-in
         // button still works.
@@ -139,7 +143,9 @@ class GoogleAuthService {
     // OAuth client ID is missing/wrong — nothing else can proceed.
     String? idToken;
     try {
-      final googleAuth = await account.authentication;
+      // In google_sign_in 7.x, account.authentication is a synchronous
+      // getter (not a Future), so no await here.
+      final googleAuth = account.authentication;
       idToken = googleAuth.idToken;
     } catch (_) {
       idToken = null;
