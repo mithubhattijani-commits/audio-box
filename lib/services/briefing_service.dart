@@ -36,7 +36,10 @@ class BriefingService {
               RemoteConfigService.instance.config.feeds.briefingJsonUrl))
           .timeout(const Duration(seconds: 20));
       if (res.statusCode != 200) return BriefingInfo.empty();
-      final decoded = jsonDecode(res.body);
+      // ENCODING FIX (15 Nov 2026): same as RssService — the site sends
+      // no charset, so res.body would decode UTF-8 Urdu as Latin-1
+      // mojibake. Decode the raw bytes as UTF-8 ourselves.
+      final decoded = jsonDecode(utf8.decode(res.bodyBytes));
       if (decoded is! Map<String, dynamic>) return BriefingInfo.empty();
 
       String strVal(String key) {
