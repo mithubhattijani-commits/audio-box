@@ -41,6 +41,7 @@ class AudioDownloadService {
       // Not loaded: no ad available right now — download anyway
       // (fail-soft, never punish the user for a missing ad).
     }
+    if (!context.mounted) return;
     await downloadDirect(context, item);
   }
 
