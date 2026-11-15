@@ -51,3 +51,6 @@ android/local.properties
 
 # Generated audio cache is device-only, never committed.
 # (Audio files live in the app documents dir on device, not in the repo.)
+
+# Release signing key — never commit the plaintext keystore.
+android/app/release.keystore
