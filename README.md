@@ -53,10 +53,12 @@ URL (fail-soft: cached config + bundled defaults when offline):
 https://nigraantv.xyz/apps/config/audio-box.json
 ```
 
-**The file does not exist yet** — create it on the website as a follow-up
-step. Until then the app runs on the bundled defaults (same values as the
-example below). Every key below is changeable from the website with no app
-rebuild, and takes effect immediately while the app is online.
+**Live since 15 Nov 2026** at that URL (deploy c6ebd450). Until the app
+can reach it, it runs on the bundled defaults (same values as the
+example below). Every key below is changeable from the website with no
+app rebuild, and takes effect immediately while the app is online —
+except a changed Unity Game ID, which takes effect on the next app
+launch (the Unity SDK initialises once at startup).
 
 ```json
 {
@@ -91,8 +93,21 @@ rebuild, and takes effect immediately while the app is online.
     "edge_enabled": true,
     "voices": ["aoede", "charon", "asad", "uzma"],
     "coins_per_minute": 50,
-    "daily_cap": 10
-  }
+    "daily_cap": 10,
+    "proxy_url": "https://nigraan-tv-tts-proxy.mithubhattijani.workers.dev"
+  },
+  "unity": {
+    "game_id": "800438808",
+    "rewarded_placement_id": "BP_Rewarded_Android",
+    "banner_placement_id": "BP_Banner_Android",
+    "app_open_placement_id": "BP_Interstitial_Android"
+  },
+  "feeds": {
+    "rss_url": "https://nigraantv.xyz/rss.xml",
+    "briefing_json_url": "https://nigraantv.xyz/briefing.json",
+    "briefing_mp3_url": "https://nigraantv.xyz/briefing.mp3"
+  },
+  "splash": { "image_url": "" }
 }
 ```
 
@@ -109,9 +124,18 @@ Rules:
 - `announcement` — the bar shows only when `enabled=true` AND `text` is
   non-empty.
 - `tts` — which voices are offered, Gemini vs Edge on/off, coins per
-  minute, daily cap. **Gemini API keys are NEVER in the app or this
-  config** — they live server-side in the TTS proxy Worker only (adding
-  keys 5–6 later is a Worker secret update, no app rebuild).
+  minute, daily cap, and the proxy URL (`proxy_url`). **Gemini API keys
+  are NEVER in the app or this config** — they live server-side in the
+  TTS proxy Worker only (adding keys 5–6 later is a Worker secret
+  update, no app rebuild).
+- `unity` — the Unity Game ID and all three placement IDs. Change them
+  here, no rebuild. A changed Game ID applies on the next app launch;
+  placement IDs on the next ad load.
+- `feeds` — the RSS feed and briefing JSON/MP3 URLs (ticker, article
+  list, briefing). Change them here, no rebuild.
+- `splash` — `image_url` sets a remote splash poster (empty = the
+  bundled poster). Applies from the next app launch; the bundled poster
+  stays as the offline/broken-link fallback.
 - **Version is NOT in this config.** Version checks use the separate fixed
   URL below — one source of truth, same as TJ Earn.
 
@@ -125,9 +149,8 @@ behaviour):
 https://nigraantv.xyz/apps/audio-box-version.json
 ```
 
-**The file does not exist yet** — create it on the website as a follow-up
-step. Same fields as TJ Earn's `tj-earn-version.json`, plus one additive
-field for force-update:
+**Live since 15 Nov 2026** at that URL. Same fields as TJ Earn's
+`tj-earn-version.json`, plus one additive field for force-update:
 
 ```json
 {
