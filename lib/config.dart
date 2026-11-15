@@ -26,6 +26,8 @@ class AppConfig {
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 
   /// Nigraan TV TTS proxy (public Cloudflare Worker, no key in the app).
+  /// DEFAULT only — the remote config (tts.proxy_url) overrides this at
+  /// runtime, so the proxy can change without a rebuild.
   static const ttsProxyBase =
       'https://nigraan-tv-tts-proxy.mithubhattijani.workers.dev';
 
@@ -44,7 +46,9 @@ class AppConfig {
       'https://nigraantv.xyz/apps/audio-box-version.json';
 
   /// Nigraan TV site feeds used by the ticker, article list, Article
-  /// Listen + News Briefing.
+  /// Listen + News Briefing. DEFAULTS only — the remote config
+  /// (feeds.rss_url / briefing_json_url / briefing_mp3_url) overrides
+  /// them at runtime, so the feeds can change without a rebuild.
   static const siteRssUrl = 'https://nigraantv.xyz/rss.xml';
   static const briefingJsonUrl = 'https://nigraantv.xyz/briefing.json';
   static const briefingMp3Url = 'https://nigraantv.xyz/briefing.mp3';
