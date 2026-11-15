@@ -44,7 +44,7 @@ jobs:
       # with the SAME permanent key, so installed apps update without
       # uninstalling.
       - name: Decrypt release keystore
-        run: openssl enc -d -aes-256-cbc -salt -pbkdf2 -in android/app/release.keystore.enc -out android/app/release.keystore -pass pass:"${{ secrets.KEYSTORE_PASSPHRASE }}"
+        run: openssl enc -d -aes-256-cbc -salt -pbkdf2 -in android/app/audiobox-release.keystore.enc -out android/app/release.keystore -pass pass:"${{ secrets.KEYSTORE_PASSPHRASE }}"
 
       - name: Build release APK
         env:
