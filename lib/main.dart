@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/main_shell.dart';
+import 'screens/splash_screen.dart';
 import 'services/audio_library_service.dart';
 import 'services/coins_service.dart';
 import 'theme.dart';
@@ -47,6 +48,10 @@ class AudioBoxApp extends StatefulWidget {
 }
 
 class _AudioBoxAppState extends State<AudioBoxApp> {
+  /// False while the splash screen is showing; true once startup
+  /// finished and the app shell takes over.
+  bool _started = false;
+
   Future<void> _changeLocale(Locale locale) async {
     appLocale.value = locale;
     await widget.prefs.setString('language', locale.languageCode);
@@ -67,12 +72,16 @@ class _AudioBoxAppState extends State<AudioBoxApp> {
           ],
           supportedLocales: const [Locale('en'), Locale('ur')],
           theme: AudioBoxTheme.light,
-          home: MainShell(
-            coins: widget.coins,
-            library: widget.library,
-            appLocale: appLocale,
-            onLocaleChanged: _changeLocale,
-          ),
+          home: _started
+              ? MainShell(
+                  coins: widget.coins,
+                  library: widget.library,
+                  appLocale: appLocale,
+                  onLocaleChanged: _changeLocale,
+                )
+              : SplashScreen(
+                  onFinished: () => setState(() => _started = true),
+                ),
         );
       },
     );
