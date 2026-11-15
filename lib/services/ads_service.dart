@@ -18,21 +18,19 @@ import 'remote_config_service.dart';
 /// (ads_enabled) is on AND its zone key is true — same pattern as
 /// TJ Earn/Doner.
 ///
-/// TODO — UNITY SETUP (do this before any public build):
-/// 1. Create a NEW Unity project "Audio Box From Jaani" at
-///    https://cloud.unity.com (do NOT reuse TJ Earn's Game ID 800417967).
-/// 2. Create placements: Rewarded (e.g. BP_Rewarded_Android), Banner
-///    (e.g. BP_Banner_Android), App Open (e.g. BP_AppOpen_Android).
-/// 3. Replace the REPLACE_ME constants below with the real IDs, set
-///    [testMode] to false, and rebuild.
+/// LIVE (15 Nov 2026): Unity project "Audio Box From Jaani", Game ID
+/// 800438808 (org TJ Earn). App Open is an Interstitial-format placement
+/// (dashboard offers no separate App Open format) — display name
+/// BP_AppOpen_Android, placement ID BP_Interstitial_Android (same as
+/// TJ Earn's App Open setup).
 class UnityAdsService {
-  static const String gameId = 'REPLACE_ME';
-  static const String rewardedPlacementId = 'REPLACE_ME';
-  static const String bannerPlacementId = 'REPLACE_ME';
-  static const String appOpenPlacementId = 'REPLACE_ME';
+  static const String gameId = '800438808';
+  static const String rewardedPlacementId = 'BP_Rewarded_Android';
+  static const String bannerPlacementId = 'BP_Banner_Android';
+  static const String appOpenPlacementId = 'BP_Interstitial_Android';
 
   /// Keep true while testing. Production builds set this to false.
-  static const bool testMode = true;
+  static const bool testMode = false;
 
   /// True once the real Unity IDs are filled in.
   static bool get adsConfigured => gameId != 'REPLACE_ME';
