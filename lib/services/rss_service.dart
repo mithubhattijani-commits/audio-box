@@ -34,7 +34,7 @@ class RssArticle {
   String get relativeTime => RssService.relativeTime(pubDate);
 }
 
-/// Fetches https://nigraantv.xyz/rss.xml and parses its <item> entries
+/// Fetches https://nigraantv.xyz/rss.xml and parses its item entries
 /// with a small hand-rolled parser (no extra dependency for v1).
 ///
 /// FEED SOURCE (verified 15 Nov 2026): the site itself declares it —
