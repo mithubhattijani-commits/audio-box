@@ -1,0 +1,65 @@
+name: Build Audio Box APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          df -h
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter 3.47.8
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.8"
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      # Debug APK proves compilation. Release signing is a follow-up
+      # (see README): create a keystore, add it as a secret, and switch
+      # this step to --release like TJ Earn's workflow.
+      - name: Build debug APK
+        run: |
+          flutter build apk --debug \
+            --dart-define=SUPABASE_URL=https://znyaxxkhhopdqrvxhxmb.supabase.co \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Verify APK
+        run: |
+          ls -la build/app/outputs/flutter-apk/app-debug.apk
+          APK=build/app/outputs/flutter-apk/app-debug.apk
+          AAPT2=$(ls "$ANDROID_SDK_ROOT"/build-tools/*/aapt2 | head -1)
+          "$AAPT2" dump badging "$APK" | grep -F "package: name='com.nigraantv.audiobox'"
+          EXPECTED_VC=$(grep -E '^version:' pubspec.yaml | sed 's/.*+//')
+          EXPECTED_VN=$(grep -E '^version:' pubspec.yaml | sed 's/^version: //; s/+.*//')
+          "$AAPT2" dump badging "$APK" | grep -F "versionCode='$EXPECTED_VC'"
+          "$AAPT2" dump badging "$APK" | grep -F "versionName='$EXPECTED_VN'"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio-box-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
