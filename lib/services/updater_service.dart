@@ -78,6 +78,7 @@ class UpdaterService {
   static Future<void> checkForUpdate(BuildContext context) async {
     try {
       final info = await PackageInfo.fromPlatform();
+      if (!context.mounted) return;
       final currentCode = int.tryParse(info.buildNumber) ?? 0;
       final latest = await _fetchManifest();
       if (latest == null) return;
@@ -158,6 +159,7 @@ class UpdaterService {
         return;
       }
       final info = await PackageInfo.fromPlatform();
+      if (!context.mounted) return;
       final currentCode = int.tryParse(info.buildNumber) ?? 0;
       if (!isNewerVersion(latestCode, currentCode)) {
         ScaffoldMessenger.of(context).showSnackBar(
