@@ -107,7 +107,7 @@ class _SpeechWriterScreenState extends State<SpeechWriterScreen> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _occasion,
+                    initialValue: _occasion,
                     decoration: const InputDecoration(labelText: 'Occasion'),
                     items: _occasions.entries.map((e) {
                       return DropdownMenuItem(
@@ -123,7 +123,7 @@ class _SpeechWriterScreenState extends State<SpeechWriterScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _length,
+                    initialValue: _length,
                     decoration: const InputDecoration(labelText: 'Length'),
                     items: const [
                       DropdownMenuItem(value: 'medium', child: Text('Medium')),
