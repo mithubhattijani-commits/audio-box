@@ -48,7 +48,7 @@ jobs:
 
       - name: Build release APK
         env:
-          KEYSTORE_FILE: android/app/release.keystore
+          KEYSTORE_FILE: ${{ github.workspace }}/android/app/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSPHRASE }}
           KEY_ALIAS: audiobox
           KEY_PASSWORD: ${{ secrets.KEYSTORE_PASSPHRASE }}
