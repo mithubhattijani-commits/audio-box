@@ -288,10 +288,14 @@ flutter build apk --debug \
   --dart-define=SUPABASE_ANON_KEY=<same public anon key as TJ Earn>
 ```
 
-CI (`.github/workflows/build-apk.yml`): builds a debug APK on push to
+CI (`.github/workflows/build-apk.yml`): builds a **release APK** on push to
 `main` (public repo = free Actions) and uploads it as an artifact.
-Release signing is a follow-up: create a keystore, add it as a secret,
-and switch the workflow to `--release` like TJ Earn's.
+Release signing is LIVE since 15 Nov 2026: the keystore
+(`android/app/release.keystore.enc`, AES-256 encrypted, passphrase in the
+`KEYSTORE_PASSPHRASE` repo secret) is decrypted in CI and every release
+build is signed with the same permanent key — installed apps update
+without uninstalling. The plaintext keystore is gitignored and backed up
+outside the repo; never commit it.
 
 ## Files
 
@@ -327,7 +331,10 @@ supabase/functions/           audiobox-daily-coins, audiobox-claim-ad-reward,
   plugin APIs (same versions as TJ Earn) but **not compiled yet** — run
   `flutter analyze` + the CI build first; fix whatever it reports.
 - Update download opens the APK URL in the browser (see "In-app update").
-- Release signing/keystore not set up yet (see "Build").
+- Release builds are signed with the permanent key (see "Build") — the
+  first release-signed build (v1.0.1) needs a one-time uninstall of any
+  debug-signed install, because Android refuses to update an app when
+  the signing key changes. After that, in-app updates install directly.
 - Supabase Edge Functions written but not deployed; anonymous sign-ins
   must be enabled in the dashboard first.
 - Unity Game ID + placements are `REPLACE_ME` (see "Unity setup").
