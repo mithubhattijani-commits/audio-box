@@ -180,7 +180,6 @@ class _CoinsScreenState extends State<CoinsScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: const UnityBannerAdWidget(zone: 'coins'),
     );
   }
 }
