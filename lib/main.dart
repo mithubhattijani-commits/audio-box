@@ -6,6 +6,7 @@ import 'screens/main_shell.dart';
 import 'screens/splash_screen.dart';
 import 'services/audio_library_service.dart';
 import 'services/coins_service.dart';
+import 'services/remote_config_service.dart';
 import 'theme.dart';
 
 /// Language choice, persisted locally. Defaults to English.
@@ -26,6 +27,10 @@ Future<void> main() async {
   // first frame inside MainShell — nothing here may block startup.
   final coins = CoinsService();
   await coins.load();
+  // Cached remote config (disk only, no network) loads before the first
+  // frame so the splash screen can already use a remotely-set poster
+  // image on this launch.
+  await RemoteConfigService.instance.loadCache();
   final library = AudioLibraryService();
 
   runApp(AudioBoxApp(coins: coins, library: library, prefs: prefs));
