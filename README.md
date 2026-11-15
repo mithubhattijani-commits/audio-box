@@ -156,11 +156,18 @@ https://nigraantv.xyz/apps/audio-box-version.json
 {
   "versionCode": 2,
   "versionName": "1.0.1",
-  "url": "https://github.com/mithubhattijani-commits/nigraan-apps-releases/releases/download/audio-box-v1.0.1/audio-box-v1.0.1.apk",
-  "notes": "Bug fixes and new voices.",
+  "url": "https://drive.google.com/uc?export=download&id=1ijdr6IG_rSUQLKkM6Z09wo3IERZrLcQ5",
+  "notes": "Urdu news fix — ticker and Latest News now show proper Urdu.",
   "minVersionCode": 1
 }
 ```
+
+The live file points at the Drive download link (the GitHub release
+URL is kept for later, once a signed release build exists). The app
+opens the URL in the external browser — the browser downloads the APK
+and the user taps the finished download to install. Same package +
+higher versionCode = update, data kept. From v1.0.1 on, updates arrive
+inside the app itself — no more chat links to install.
 
 - `versionCode` / `versionName` / `url` / `notes` — same as TJ Earn.
 - `minVersionCode` (optional, default 0 = no force): installed builds
