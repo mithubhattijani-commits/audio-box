@@ -6,7 +6,6 @@ import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
-import '../config.dart';
 import '../models/tts_voice.dart';
 import 'remote_config_service.dart';
 
@@ -33,10 +32,14 @@ class GeneratedAudio {
 /// uses (Gemini Aoede/Charon via POST /tts, Edge Asad/Uzma via
 /// POST /edge-tts). No API key lives in the app: keys stay server-side
 /// in the Worker (adding keys 5–6 later is a Worker secret update, no
-/// app rebuild). What the remote config DOES control: which voices are
-/// offered, Gemini vs Edge on/off, coins per minute, daily cap.
+/// app rebuild). What the remote config DOES control: the proxy URL,
+/// which voices are offered, Gemini vs Edge on/off, coins per minute,
+/// daily cap.
 class TtsService {
-  static const String _base = AppConfig.ttsProxyBase;
+  /// Proxy base URL from the remote config — point the app at a new
+  /// proxy without a rebuild. Defaults to the live Worker URL.
+  static String get _base =>
+      RemoteConfigService.instance.config.tts.proxyUrl;
 
   /// Max chars per proxy call (≈1 minute of speech per chunk).
   static const int geminiMaxChars = 1500;
