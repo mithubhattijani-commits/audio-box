@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/app_startup.dart';
+import '../services/remote_config_service.dart';
 
 /// Cold-start splash screen: the user's Text-to-Speech poster, full
 /// screen, with a live 1-100% loading count and a progress bar.
@@ -68,6 +69,27 @@ class _SplashScreenState extends State<SplashScreen> {
     super.dispose();
   }
 
+  /// Splash poster: a remotely-set picture URL when the config has one
+  /// (applies from the next launch after the config is fetched), else
+  /// the bundled poster. A broken remote URL falls back to the poster.
+  Widget _posterImage() {
+    final url = RemoteConfigService.instance.config.splash.imageUrl.trim();
+    if (url.isEmpty) {
+      return Image.asset(
+        'assets/images/splash.jpg',
+        fit: BoxFit.contain,
+      );
+    }
+    return Image.network(
+      url,
+      fit: BoxFit.contain,
+      errorBuilder: (_, _, _) => Image.asset(
+        'assets/images/splash.jpg',
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pct = (_shown * 100).round().clamp(0, 100);
@@ -85,10 +107,7 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.asset(
-              'assets/images/splash.jpg',
-              fit: BoxFit.contain,
-            ),
+            _posterImage(),
             Positioned(
               left: 32,
               right: 32,
