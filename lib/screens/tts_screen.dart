@@ -236,7 +236,7 @@ class _TtsScreenState extends State<TtsScreen> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<TtsVoice>(
-              value: voices.contains(_voice) ? _voice : voices.first,
+              initialValue: voices.contains(_voice) ? _voice : voices.first,
               decoration: InputDecoration(
                 labelText: AppStrings.tr('voice', locale),
               ),
