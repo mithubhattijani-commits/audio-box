@@ -23,11 +23,22 @@ import 'remote_config_service.dart';
 /// (dashboard offers no separate App Open format) — display name
 /// BP_AppOpen_Android, placement ID BP_Interstitial_Android (same as
 /// TJ Earn's App Open setup).
+///
+/// REMOTE IDS (15 Nov 2026): the Game ID and all placement IDs now come
+/// from the remote config (website) — changing them needs NO rebuild.
+/// A changed Game ID takes effect on the next app launch (the Unity SDK
+/// initialises once at startup); placement IDs on the next ad load.
 class UnityAdsService {
-  static const String gameId = '800438808';
-  static const String rewardedPlacementId = 'BP_Rewarded_Android';
-  static const String bannerPlacementId = 'BP_Banner_Android';
-  static const String appOpenPlacementId = 'BP_Interstitial_Android';
+  /// Unity IDs from the remote config. Defaults in the config equal the
+  /// live values, so an unreachable config keeps the current ads working.
+  static String get gameId =>
+      RemoteConfigService.instance.config.unity.gameId;
+  static String get rewardedPlacementId =>
+      RemoteConfigService.instance.config.unity.rewardedPlacementId;
+  static String get bannerPlacementId =>
+      RemoteConfigService.instance.config.unity.bannerPlacementId;
+  static String get appOpenPlacementId =>
+      RemoteConfigService.instance.config.unity.appOpenPlacementId;
 
   /// Keep true while testing. Production builds set this to false.
   static const bool testMode = false;
