@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../l10n/strings.dart';
 import '../models/audio_item.dart';
 import '../models/tts_voice.dart';
+import '../services/audio_download_service.dart';
 import '../services/audio_library_service.dart';
 import '../services/coins_service.dart';
 import '../services/remote_config_service.dart';
@@ -244,8 +245,10 @@ class _TtsScreenState extends State<TtsScreen> {
                 return DropdownMenuItem(
                   value: v,
                   child: Text(
-                    '${v.label} (${v.gender})'
-                    '${v.isPremium ? ' • Gemini' : ' • Edge (free)'}',
+                    // Display names only — Billo / Jaani / Asad / Uzma.
+                    // No provider or model names are shown anywhere in
+                    // the app (15 Nov 2026).
+                    '${v.label} (${v.gender})',
                   ),
                 );
               }).toList(),
@@ -293,9 +296,38 @@ class _TtsScreenState extends State<TtsScreen> {
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(8),
-                  child: AudioPlayerBar(
-                    file: File(item.filePath),
-                    title: item.displayTitle,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AudioPlayerBar(
+                        file: File(item.filePath),
+                        title: item.displayTitle,
+                      ),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () =>
+                                AudioDownloadService.downloadWithAd(
+                              context,
+                              item,
+                            ),
+                            icon: const Icon(Icons.download, size: 18),
+                            label: Text(
+                              AppStrings.tr('download', locale),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () =>
+                                AudioDownloadService.share(context, item),
+                            icon: const Icon(Icons.share, size: 18),
+                            label: Text(
+                              AppStrings.tr('share', locale),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),

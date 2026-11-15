@@ -256,6 +256,7 @@ class RemoteConfig {
     this.unity = const UnityConfig(),
     this.feeds = const FeedsConfig(),
     this.splash = const SplashConfig(),
+    this.tickerDirection = 'from_left',
   });
 
   /// Master switch for ALL Unity ads.
@@ -284,6 +285,11 @@ class RemoteConfig {
 
   /// Splash poster picture.
   final SplashConfig splash;
+
+  /// Ticker scroll direction — 'from_left' (text enters from the left,
+  /// moves right; the Nigraan Urdu-ticker house style) or 'from_right'
+  /// (old direction). Changeable from the website, no rebuild.
+  final String tickerDirection;
 
   bool bannerEnabled(String zone) => adsEnabled && (banners[zone] == true);
 
@@ -368,6 +374,13 @@ class RemoteConfig {
       splash: j['splash'] is Map<String, dynamic>
           ? SplashConfig.fromJson(j['splash'] as Map<String, dynamic>)
           : const SplashConfig(),
+      tickerDirection: (j['ticker'] is Map<String, dynamic> &&
+              ((j['ticker'] as Map<String, dynamic>)['direction'] ==
+                      'from_right' ||
+                  (j['ticker'] as Map<String, dynamic>)['direction'] ==
+                      'from_left'))
+          ? (j['ticker'] as Map<String, dynamic>)['direction'] as String
+          : 'from_left',
     );
   }
 }

@@ -70,7 +70,7 @@ class _ConverterScreenState extends State<ConverterScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Converts your saved WAV audio (Gemini voices) into MP3 files by re-generating the same words with the free Edge voices (Asad / Uzma). Conversion is free — no coins.',
+              'Converts your saved WAV audio into MP3 files by re-generating the same words with Asad / Uzma. Conversion is free — no coins.',
             ),
             const SizedBox(height: 16),
             Text(

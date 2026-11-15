@@ -1,11 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../l10n/strings.dart';
 import '../models/audio_item.dart';
+import '../services/audio_download_service.dart';
 import '../services/audio_library_service.dart';
 import '../widgets/audio_player_bar.dart';
 import 'converter_screen.dart';
@@ -36,38 +35,14 @@ class _MyAudioScreenState extends State<MyAudioScreen> {
     if (mounted) setState(() => _loaded = true);
   }
 
+  /// Download: one rewarded ad first, then the file saves to the
+  /// phone's Download folder (same flow as TTS Studio results).
   Future<void> _download(AudioItem item) async {
-    try {
-      final extDir = await getExternalStorageDirectory();
-      final downloads = Directory('${extDir?.path}/Download');
-      if (!await downloads.exists()) await downloads.create(recursive: true);
-      final target = File('${downloads.path}/${item.id}.${item.ext}');
-      await File(item.filePath).copy(target.path);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved to ${target.path}')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Download failed: $e')),
-      );
-    }
+    await AudioDownloadService.downloadWithAd(context, item);
   }
 
   Future<void> _share(AudioItem item) async {
-    try {
-      // share_plus 10.x API (same version TJ Earn uses).
-      await Share.shareXFiles(
-        [XFile(item.filePath)],
-        text: item.displayTitle,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Share failed: $e')),
-      );
-    }
+    await AudioDownloadService.share(context, item);
   }
 
   Future<void> _convert(AudioItem item) async {

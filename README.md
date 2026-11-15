@@ -107,7 +107,8 @@ launch (the Unity SDK initialises once at startup).
     "briefing_json_url": "https://nigraantv.xyz/briefing.json",
     "briefing_mp3_url": "https://nigraantv.xyz/briefing.mp3"
   },
-  "splash": { "image_url": "" }
+  "splash": { "image_url": "" },
+  "ticker": { "direction": "from_left" }
 }
 ```
 
@@ -136,6 +137,10 @@ Rules:
 - `splash` — `image_url` sets a remote splash poster (empty = the
   bundled poster). Applies from the next app launch; the bundled poster
   stays as the offline/broken-link fallback.
+- `ticker.direction` — `'from_left'` (default: text enters from the
+  left, moves right — the Nigraan Urdu-ticker house style) or
+  `'from_right'` (old direction). Applies within seconds while the app
+  is online, no rebuild.
 - **Version is NOT in this config.** Version checks use the separate fixed
   URL below — one source of truth, same as TJ Earn.
 
@@ -154,10 +159,10 @@ https://nigraantv.xyz/apps/audio-box-version.json
 
 ```json
 {
-  "versionCode": 2,
-  "versionName": "1.0.1",
+  "versionCode": 3,
+  "versionName": "1.0.2",
   "url": "https://drive.google.com/uc?export=download&id=1ijdr6IG_rSUQLKkM6Z09wo3IERZrLcQ5",
-  "notes": "Urdu news fix — ticker and Latest News now show proper Urdu.",
+  "notes": "Ticker scrolls from the left; voices renamed to Billo / Jaani with no provider names shown; Download button after generation (1 rewarded ad).",
   "minVersionCode": 1
 }
 ```
@@ -216,6 +221,16 @@ inside the app itself — no more chat links to install.
   the user. If Gemini is disabled remotely, Edge is used directly.
 - Cache: same text + voice + language always returns the same file, so
   repeats are free and quota-free.
+- **Display names (15 Nov 2026):** the app NEVER shows provider or
+  model names — the voices are shown as **Billo** (female), **Jaani**
+  (male), **Asad**, **Uzma**. The API voice IDs (Aoede/Charon/AsadNeural/
+  UzmaNeural) are internal only.
+- **Download (15 Nov 2026):** after generation (TTS Studio results) and
+  in My Audio, each audio has a Download button + Share. Download plays
+  ONE rewarded video ad first, then saves the file to the phone's
+  Download folder. If ads are off or no ad is available, it downloads
+  directly; if the user skips the ad, nothing downloads. See
+  `lib/services/audio_download_service.dart`.
 
 ## MP3 Converter
 

@@ -2,7 +2,7 @@ name: audio_box
 description: "Audio Box From Jaani — text-to-speech studio by Nigraan TV. Type text, get audio (Gemini + Edge voices), earn coins by watching Unity rewarded ads."
 publish_to: 'none'
 
-version: 1.0.1+2
+version: 1.0.2+3
 
 environment:
   sdk: ^3.13.7

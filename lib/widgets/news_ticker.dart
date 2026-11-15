@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/remote_config_service.dart';
 import '../services/rss_service.dart';
 
 /// Live news ticker: a scrolling headline strip at the top of Home.
@@ -73,15 +74,37 @@ class _NewsTickerState extends State<NewsTicker> {
       return;
     }
     // ~60 px/second: readable scrolling. Content is duplicated, so the
-    // jump back to 0 lands on an identical frame (seamless loop).
-    final duration = Duration(milliseconds: (max / 60 * 1000).round());
-    await _controller.animateTo(
-      max,
-      duration: duration,
-      curve: Curves.linear,
-    );
-    if (!mounted) return;
-    _controller.jumpTo(0);
+    // jump back lands on an identical frame (seamless loop).
+    // DIRECTION (remote-controlled via audio-box.json ticker.direction):
+    // 'from_left' (default, Nigraan Urdu-ticker house style) — text
+    // enters from the LEFT edge and moves right: start at max offset,
+    // animate to 0, jump back to max. 'from_right' is the old direction.
+    final fromLeft =
+        RemoteConfigService.instance.config.tickerDirection != 'from_right';
+    if (fromLeft) {
+      if (_controller.offset <= 0) _controller.jumpTo(max);
+      final duration = Duration(
+        milliseconds: (_controller.offset / 60 * 1000).round(),
+      );
+      await _controller.animateTo(
+        0,
+        duration: duration,
+        curve: Curves.linear,
+      );
+      if (!mounted) return;
+      _controller.jumpTo(max);
+    } else {
+      final duration = Duration(
+        milliseconds: ((max - _controller.offset) / 60 * 1000).round(),
+      );
+      await _controller.animateTo(
+        max,
+        duration: duration,
+        curve: Curves.linear,
+      );
+      if (!mounted) return;
+      _controller.jumpTo(0);
+    }
     _scrollStep();
   }
 

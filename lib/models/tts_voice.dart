@@ -31,7 +31,7 @@ class TtsVoice {
   static const List<TtsVoice> all = [
     TtsVoice(
       id: 'aoede',
-      label: 'Aoede',
+      label: 'Billo',
       gender: 'Female',
       engine: TtsEngine.gemini,
       apiVoice: 'Aoede',
@@ -39,7 +39,7 @@ class TtsVoice {
     ),
     TtsVoice(
       id: 'charon',
-      label: 'Charon',
+      label: 'Jaani',
       gender: 'Male',
       engine: TtsEngine.gemini,
       apiVoice: 'Charon',
