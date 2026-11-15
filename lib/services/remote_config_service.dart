@@ -1,0 +1,347 @@
+// Remote Config — server-driven in-app behaviour (v1).
+//
+// Fail-soft, copied from TJ Earn's RemoteConfigService: network -> cache
+// -> bundled defaults. Never blocks startup, never an infinite spinner,
+// never a crash — on any failure the app just uses what it has.
+//
+// Config URL (fixed): https://nigraantv.xyz/apps/config/audio-box.json
+// The file itself is created on the website as a follow-up step; until
+// it exists the app runs on the bundled defaults below.
+//
+// Polling (TJ Earn pattern): re-fetched fresh on launch, on resume, and
+// every ~60s. A change on the website takes effect immediately while the
+// app is online — no rebuild, no update.
+//
+// NOTE: the app VERSION does NOT live in this config. Version checks use
+// the separate fixed URL https://nigraantv.xyz/apps/audio-box-version.json
+// (see UpdaterService) — one source of truth, same as TJ Earn.
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../config.dart';
+
+/// One rewarded-video option on the Coins screen.
+/// New options are added later by editing the config only — no rebuild.
+class RewardOption {
+  final String id;
+  final String label;
+  final int adsRequired;
+  final int coins;
+
+  const RewardOption({
+    required this.id,
+    required this.label,
+    required this.adsRequired,
+    required this.coins,
+  });
+
+  factory RewardOption.fromJson(Map<String, dynamic> j) => RewardOption(
+        id: (j['id'] ?? '').toString(),
+        label: (j['label'] ?? '').toString(),
+        adsRequired: (j['ads_required'] as num?)?.toInt() ?? 2,
+        coins: (j['coins'] as num?)?.toInt() ?? 50,
+      );
+}
+
+/// Sponsored-ad card (Home + tools list). EXACT rule copied from TJ Earn
+/// (verified): the card shows ONLY when enabled=true AND title AND
+/// action_url are both non-empty. image_url is optional.
+class SponsoredAdConfig {
+  const SponsoredAdConfig({
+    this.enabled = false,
+    this.title = '',
+    this.body = '',
+    this.actionUrl = '',
+    this.imageUrl = '',
+  });
+
+  final bool enabled;
+  final String title;
+  final String body;
+  final String actionUrl;
+  final String imageUrl;
+
+  /// The verified TJ Earn rule — do not weaken it.
+  bool get show =>
+      enabled && title.trim().isNotEmpty && actionUrl.trim().isNotEmpty;
+
+  factory SponsoredAdConfig.fromJson(Map<String, dynamic> j) {
+    return SponsoredAdConfig(
+      enabled: j['enabled'] == true,
+      title: (j['title'] ?? '').toString(),
+      body: (j['body'] ?? '').toString(),
+      actionUrl: (j['action_url'] ?? '').toString(),
+      imageUrl: (j['image_url'] ?? '').toString(),
+    );
+  }
+}
+
+/// Slim announcement bar under the header. Shows only when enabled AND
+/// the text is non-empty.
+class AnnouncementConfig {
+  const AnnouncementConfig({this.enabled = false, this.text = ''});
+
+  final bool enabled;
+  final String text;
+
+  bool get show => enabled && text.trim().isNotEmpty;
+
+  factory AnnouncementConfig.fromJson(Map<String, dynamic> j) {
+    return AnnouncementConfig(
+      enabled: j['enabled'] == true,
+      text: (j['text'] ?? '').toString(),
+    );
+  }
+}
+
+/// TTS behaviour controlled from the website — no rebuild needed.
+/// Gemini API keys are NEVER in the app or this config: they live
+/// server-side in the TTS proxy Worker only.
+class TtsConfig {
+  const TtsConfig({
+    this.geminiEnabled = true,
+    this.edgeEnabled = true,
+    this.voices = const ['aoede', 'charon', 'asad', 'uzma'],
+    this.coinsPerMinute = 50,
+    this.dailyCap = 10,
+  });
+
+  final bool geminiEnabled;
+  final bool edgeEnabled;
+
+  /// Voice ids offered in TTS Studio (subset of aoede/charon/asad/uzma).
+  final List<String> voices;
+
+  /// Coins charged per ~1-minute generation chunk.
+  final int coinsPerMinute;
+
+  /// Max audio generations per user per day (0 = unlimited).
+  final int dailyCap;
+
+  factory TtsConfig.fromJson(Map<String, dynamic> j) {
+    final rawVoices = j['voices'];
+    List<String> voices = const ['aoede', 'charon', 'asad', 'uzma'];
+    if (rawVoices is List) {
+      final parsed =
+          rawVoices.map((v) => v.toString()).where((v) => v.isNotEmpty).toList();
+      if (parsed.isNotEmpty) voices = parsed;
+    }
+    return TtsConfig(
+      geminiEnabled: j['gemini_enabled'] != false,
+      edgeEnabled: j['edge_enabled'] != false,
+      voices: voices,
+      coinsPerMinute: (j['coins_per_minute'] as num?)?.toInt() ?? 50,
+      dailyCap: (j['daily_cap'] as num?)?.toInt() ?? 10,
+    );
+  }
+}
+
+class RemoteConfig {
+  const RemoteConfig({
+    this.adsEnabled = true,
+    this.banners = const {
+      'home': true,
+      'tts_studio': true,
+      'tools': true,
+      'briefing': true,
+      'speech_writer': true,
+      'converter': true,
+      'my_audio': true,
+      'coins': true,
+    },
+    this.appOpenAdEnabled = true,
+    this.rewardedEnabled = true,
+    this.rewardedOptions = const [
+      RewardOption(
+        id: 'ads2',
+        label: 'Watch 2 ads — get 50 coins',
+        adsRequired: 2,
+        coins: 50,
+      ),
+    ],
+    this.sponsoredAd = const SponsoredAdConfig(),
+    this.announcement = const AnnouncementConfig(),
+    this.tts = const TtsConfig(),
+  });
+
+  /// Master switch for ALL Unity ads.
+  final bool adsEnabled;
+
+  /// Per-screen banner zones. A banner shows only when the master switch
+  /// is on AND its zone key is true.
+  final Map<String, bool> banners;
+
+  /// App Open ad on cold start.
+  final bool appOpenAdEnabled;
+
+  /// Rewarded video master switch.
+  final bool rewardedEnabled;
+
+  final List<RewardOption> rewardedOptions;
+  final SponsoredAdConfig sponsoredAd;
+  final AnnouncementConfig announcement;
+  final TtsConfig tts;
+
+  bool bannerEnabled(String zone) => adsEnabled && (banners[zone] == true);
+
+  factory RemoteConfig.fromJson(Map<String, dynamic> j) {
+    final rawBanners = j['banners'];
+    final banners = <String, bool>{
+      'home': true,
+      'tts_studio': true,
+      'tools': true,
+      'briefing': true,
+      'speech_writer': true,
+      'converter': true,
+      'my_audio': true,
+      'coins': true,
+    };
+    if (rawBanners is Map<String, dynamic>) {
+      for (final e in rawBanners.entries) {
+        banners[e.key] = e.value == true;
+      }
+    }
+
+    final rawRewarded = j['rewarded'];
+    List<RewardOption> options = const [
+      RewardOption(
+        id: 'ads2',
+        label: 'Watch 2 ads — get 50 coins',
+        adsRequired: 2,
+        coins: 50,
+      ),
+    ];
+    bool rewardedEnabled = true;
+    if (rawRewarded is Map<String, dynamic>) {
+      rewardedEnabled = rawRewarded['enabled'] != false;
+      final rawOptions = rawRewarded['options'];
+      if (rawOptions is List && rawOptions.isNotEmpty) {
+        options = rawOptions
+            .whereType<Map<String, dynamic>>()
+            .map(RewardOption.fromJson)
+            .where((o) => o.adsRequired > 0 && o.coins > 0)
+            .toList();
+        if (options.isEmpty) {
+          options = const [
+            RewardOption(
+              id: 'ads2',
+              label: 'Watch 2 ads — get 50 coins',
+              adsRequired: 2,
+              coins: 50,
+            ),
+          ];
+        }
+      }
+    }
+
+    return RemoteConfig(
+      adsEnabled: j['ads_enabled'] != false,
+      banners: banners,
+      appOpenAdEnabled:
+          (j['app_open_ad'] is Map<String, dynamic>)
+              ? (j['app_open_ad'] as Map<String, dynamic>)['enabled'] != false
+              : true,
+      rewardedEnabled: rewardedEnabled,
+      rewardedOptions: options,
+      sponsoredAd: j['sponsored_ad'] is Map<String, dynamic>
+          ? SponsoredAdConfig.fromJson(
+              j['sponsored_ad'] as Map<String, dynamic>,
+            )
+          : const SponsoredAdConfig(),
+      announcement: j['announcement'] is Map<String, dynamic>
+          ? AnnouncementConfig.fromJson(
+              j['announcement'] as Map<String, dynamic>,
+            )
+          : const AnnouncementConfig(),
+      tts: j['tts'] is Map<String, dynamic>
+          ? TtsConfig.fromJson(j['tts'] as Map<String, dynamic>)
+          : const TtsConfig(),
+    );
+  }
+}
+
+/// Singleton service. UI listens to [notifier] so a fresh fetch updates
+/// the screens without a restart.
+class RemoteConfigService {
+  RemoteConfigService._();
+
+  static final RemoteConfigService instance = RemoteConfigService._();
+
+  static const _cacheKey = 'ab_remote_config_json_v1';
+  static const _url = AppConfig.remoteConfigUrl;
+  static const Duration _fetchTimeout = Duration(seconds: 8);
+  static const Duration refreshInterval = Duration(seconds: 60);
+
+  final ValueNotifier<RemoteConfig> notifier =
+      ValueNotifier(const RemoteConfig());
+
+  RemoteConfig get config => notifier.value;
+
+  Timer? _pollTimer;
+  bool _refreshing = false;
+
+  /// Loads the cache first (fast), then ALWAYS fetches fresh from the
+  /// network — no TTL gate — and starts the ~60s poll. Never blocks the
+  /// first frame; failures stay silent and keep the cache/defaults.
+  Future<void> init() async {
+    await _loadFromCache();
+    unawaited(_refresh());
+    startPolling();
+  }
+
+  Future<void> refresh() => _refresh();
+
+  void startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(
+      refreshInterval,
+      (_) => unawaited(_refresh()),
+    );
+  }
+
+  void dispose() {
+    _pollTimer?.cancel();
+  }
+
+  Future<void> _loadFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_cacheKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        notifier.value = RemoteConfig.fromJson(decoded);
+      }
+    } catch (_) {
+      // Corrupt cache: keep bundled defaults.
+    }
+  }
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    _refreshing = true;
+    try {
+      final res = await http
+          .get(Uri.parse(_url))
+          .timeout(_fetchTimeout);
+      if (res.statusCode != 200) return;
+      final decoded = jsonDecode(res.body);
+      if (decoded is! Map<String, dynamic>) return;
+      notifier.value = RemoteConfig.fromJson(decoded);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_cacheKey, res.body);
+      } catch (_) {
+        // Cache write is best-effort.
+      }
+    } catch (_) {
+      // Offline or unreachable: keep cache/defaults (fail-soft).
+    } finally {
+      _refreshing = false;
+    }
+  }
+}
