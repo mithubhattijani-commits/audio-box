@@ -7,7 +7,6 @@ import '../services/ads_service.dart';
 import '../services/audio_library_service.dart';
 import '../services/coins_service.dart';
 import '../services/remote_config_service.dart';
-import '../services/supabase_service.dart';
 import '../services/updater_service.dart';
 import 'coins_screen.dart';
 import 'home_screen.dart';
@@ -16,12 +15,10 @@ import 'tts_screen.dart';
 
 /// Bottom-nav shell (Home / TTS Studio / Coins / My Audio).
 ///
-/// Startup order (TJ Earn pattern — nothing network-related blocks the
-/// first frame):
-/// - Remote config init (cache first, then network, 60s poll).
-/// - Supabase init (anonymous sign-in, best-effort).
-/// - Unity init + App Open ad on cold start (when app_open_ad.enabled).
+/// Cold startup (remote config, Supabase, Unity) already ran on the
+/// splash screen before this shell appears. What still runs here:
 /// - In-app update check (fixed version URL, every launch).
+/// - App Open ad on cold start (when app_open_ad.enabled).
 /// - Resume refreshes the remote config.
 class MainShell extends StatefulWidget {
   final CoinsService coins;
@@ -52,13 +49,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Fire-and-forget startup work — never blocks the first frame.
-      unawaited(RemoteConfigService.instance.init());
-      unawaited(SupabaseService.init());
-      // Update check (fixed version URL, every launch).
+      // Startup (remote config, Supabase, Unity) already ran on the
+      // splash screen. Only the update check and the App Open ad run
+      // here, exactly as before.
       unawaited(UpdaterService.checkForUpdate(context));
-      // Unity init + App Open ad on cold start.
-      Future.delayed(const Duration(seconds: 3), () {
+      // App Open ad on cold start (Unity init is idempotent, so this
+      // is safe even if the splash was skipped).
+      Future.delayed(const Duration(seconds: 2), () {
         if (!_appOpenAttempted) {
           _appOpenAttempted = true;
           unawaited(
