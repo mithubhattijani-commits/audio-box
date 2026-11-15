@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../config.dart';
+import 'remote_config_service.dart';
 
 /// The hourly Nigraan TV news briefing (same briefing.mp3 + briefing.json
 /// the website plays). The JSON shape is parsed defensively — if a field
@@ -20,11 +20,11 @@ class BriefingInfo {
     required this.headlines,
   });
 
-  factory BriefingInfo.empty() => const BriefingInfo(
+  factory BriefingInfo.empty() => BriefingInfo(
         title: 'Nigraan TV News Briefing',
         generatedAt: '',
-        audioUrl: AppConfig.briefingMp3Url,
-        headlines: [],
+        audioUrl: RemoteConfigService.instance.config.feeds.briefingMp3Url,
+        headlines: const [],
       );
 }
 
@@ -32,7 +32,8 @@ class BriefingService {
   static Future<BriefingInfo> fetch() async {
     try {
       final res = await http
-          .get(Uri.parse(AppConfig.briefingJsonUrl))
+          .get(Uri.parse(
+              RemoteConfigService.instance.config.feeds.briefingJsonUrl))
           .timeout(const Duration(seconds: 20));
       if (res.statusCode != 200) return BriefingInfo.empty();
       final decoded = jsonDecode(res.body);
@@ -59,7 +60,7 @@ class BriefingService {
           ? strVal('audio_url')
           : (strVal('audio').isNotEmpty
               ? strVal('audio')
-              : AppConfig.briefingMp3Url);
+              : RemoteConfigService.instance.config.feeds.briefingMp3Url);
 
       return BriefingInfo(
         title: strVal('title').isNotEmpty
