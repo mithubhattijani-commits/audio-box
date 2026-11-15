@@ -307,7 +307,7 @@ class CaptionService {
             'mime_type': mimeTypeForPath(file.path),
             'file_name': fileName,
             'lang': lang,
-            ?'duration_seconds': durationSeconds,
+            'duration_seconds': ?durationSeconds,
           }),
         )
         .timeout(const Duration(seconds: 180));
