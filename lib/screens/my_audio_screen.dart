@@ -6,7 +6,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../l10n/strings.dart';
 import '../models/audio_item.dart';
-import '../services/ads_service.dart';
 import '../services/audio_library_service.dart';
 import '../widgets/audio_player_bar.dart';
 import 'converter_screen.dart';
@@ -209,7 +208,6 @@ class _MyAudioScreenState extends State<MyAudioScreen> {
                     );
                   },
                 ),
-      bottomNavigationBar: const UnityBannerAdWidget(zone: 'my_audio'),
     );
   }
 }
