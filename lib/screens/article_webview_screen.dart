@@ -11,7 +11,7 @@ import '../services/rss_service.dart';
 ///
 /// STRATEGY (the core purpose of this app): the app funnels users to
 /// website articles. This screen loads the REAL article page —
-/// https://nigraantv.xyz/article/<id>/ — with JavaScript fully enabled,
+/// https://nigraantv.xyz/article/ARTICLE_ID/ — with JavaScript fully enabled,
 /// no reader mode, no ad blocking, nothing stripped. The user sees the
 /// website's own banner ads on every article and the site earns from
 /// those impressions, while the user gets NOTHING (no coins) for reading.
