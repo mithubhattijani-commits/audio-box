@@ -63,11 +63,14 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
 
   Future<void> _pickVideo() async {
     if (_busy) return;
-    final picked = await FilePicker.platform.pickFiles(
+    // file_picker 13.x API: FilePicker.pickFile() returns a single
+    // PlatformFile (null on cancel); the old FilePicker.platform
+    // + FilePickerResult API is gone in 13.x.
+    final picked = await FilePicker.pickFile(
       type: FileType.video,
     );
-    if (picked == null || picked.files.isEmpty) return;
-    final path = picked.files.single.path;
+    if (picked == null) return;
+    final path = picked.path;
     if (path == null) {
       if (mounted) {
         setState(() => _message = 'Could not read that video.');
@@ -88,7 +91,7 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
     final controller = VideoPlayerController.file(file);
     setState(() {
       _file = file;
-      _fileName = picked.files.single.name;
+      _fileName = picked.name;
       _controller = controller;
       _playerReady = false;
       _result = null;

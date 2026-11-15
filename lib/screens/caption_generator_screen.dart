@@ -50,12 +50,15 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
 
   Future<void> _pickFile() async {
     if (_busy) return;
-    final picked = await FilePicker.platform.pickFiles(
+    // file_picker 13.x API: FilePicker.pickFile() returns a single
+    // PlatformFile (null on cancel); the old FilePicker.platform
+    // + FilePickerResult API is gone in 13.x.
+    final picked = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: CaptionService.allMediaExtensions,
     );
-    if (picked == null || picked.files.isEmpty) return;
-    final path = picked.files.single.path;
+    if (picked == null) return;
+    final path = picked.path;
     if (path == null) {
       if (mounted) {
         setState(() => _message = 'Could not read that file.');
@@ -77,7 +80,7 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
     }
     setState(() {
       _file = file;
-      _fileName = picked.files.single.name;
+      _fileName = picked.name;
       _duration = null;
       _result = null;
       _message = null;

@@ -19,14 +19,21 @@ dependencies:
   http: ^1.3.0
   path_provider: ^2.1.5
   shared_preferences: ^2.3.3
-  share_plus: ^10.1.4
+  # share_plus 13.x (was 10.1.4): file_picker 13.x needs
+  # windows_file_picker ^2.0.0 / win32 ^6.3.0, which share_plus 10.x
+  # (win32 ^5.5.3) cannot satisfy — the pair only resolves together
+  # on 13.x. The old static Share.shareXFiles API is deprecated in
+  # 13.x, so audio_download_service.dart uses SharePlus.instance.
+  share_plus: ^13.0.0
   crypto: ^3.0.6
   # Audio playback for generated files + the news briefing stream.
   audioplayers: ^6.4.0
   # In-app update: open the APK download URL + article links.
   url_launcher: ^6.2.5
-  # Installed versionCode for the update check.
-  package_info_plus: ^8.3.0
+  # package_info_plus 10.x (was 8.3.0): share_plus 13.x needs win32
+  # ^6.0.0, which package_info_plus 8.x (win32 ^5.5.3) cannot satisfy.
+  # Usage is only PackageInfo.fromPlatform() (updater_service.dart).
+  package_info_plus: ^10.2.2
   # Google sign-in (v1.0.3): coins are tied to a real Google account.
   # v7 is a singleton: GoogleSignIn.instance.initialize(serverClientId:)
   # then .authenticate(); no web redirect / deep-link scheme needed.
@@ -34,11 +41,13 @@ dependencies:
   google_sign_in: ^7.2.0
   # Audio & Video tools (v1.0.3 batch 2): pick audio/video files for
   # the caption tools, and play picked videos with a caption preview.
-  # Caret ranges so `flutter pub get` resolves the newest release that
-  # still satisfies this project's SDK: file_picker 13.x needs Flutter
-  # 3.38+, so the 8.x line is the safe floor here; video_player 2.10.x
+  # file_picker 13.x (needs Flutter 3.38+, Dart 3.10+ — CI runs
+  # Flutter 3.47.8, so this is satisfied). 8.3.7 is NOT usable: it
+  # hardcodes compileSdk 34 while its flutter_plugin_android_lifecycle
+  # dependency requires 36, which failed CI run #55 at
+  # :file_picker:checkReleaseAarMetadata. video_player 2.10.x
   # is the verified-stable line (2.14.x is current as of Nov 2026).
-  file_picker: ^8.0.0
+  file_picker: ^13.0.0
   video_player: ^2.10.1
   # Full article pages in-app (real page, website banner ads included).
   webview_flutter: ^4.8.0

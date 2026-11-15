@@ -107,10 +107,14 @@ class AudioDownloadService {
 
   static Future<void> share(BuildContext context, AudioItem item) async {
     try {
-      // share_plus 10.x API (same version TJ Earn uses).
-      await Share.shareXFiles(
-        [XFile(item.filePath)],
-        text: item.displayTitle,
+      // share_plus 13.x API (the old static Share.shareXFiles is
+      // deprecated in 13.x). ShareParams throws on empty text, so
+      // only pass it when non-empty.
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(item.filePath)],
+          text: item.displayTitle.isNotEmpty ? item.displayTitle : null,
+        ),
       );
     } catch (e) {
       if (!context.mounted) return;
