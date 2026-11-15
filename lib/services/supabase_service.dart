@@ -15,12 +15,16 @@ import '../config.dart';
 /// supabase/functions/.
 ///
 /// v1.0.3 auth: Google sign-in (see google_auth_service.dart).
-/// Anonymous sign-in is NOT automatic any more: coins must belong to a
-/// real Google account. Anonymous sessions exist ONLY as the pre-link
-/// step — [ensureAnonymousSession] creates one just before the Google
-/// identity is linked onto it, so the same user.id (and coins) survives.
-/// Enable BOTH "Anonymous sign-ins" AND "Enable Manual Linking" in the
-/// Supabase dashboard (Auth -> Providers) or linking cannot work.
+/// v1.0.4 auth: + email + password login / register, the same auth
+/// TJ Earn had (see email_auth_service.dart). Anonymous sign-in is
+/// NOT automatic any more: coins must belong to a real account.
+/// Anonymous sessions exist ONLY as the pre-link step — the pre-link
+/// step before Google sign-in, or the pre-register step before an
+/// email is attached — so the same user.id (and coins) survives.
+/// Enable BOTH "Anonymous sign-ins" AND "Enable Manual Linking" in
+/// the Supabase dashboard (Auth -> Providers) or linking cannot work.
+/// "Confirm email" is OFF in this project (verified 15 Nov 2026),
+/// so email registration signs the user in at once.
 class SupabaseService {
   static SupabaseClient get client => Supabase.instance.client;
 
@@ -147,6 +151,53 @@ class SupabaseService {
         provider: OAuthProvider.google,
         idToken: idToken,
         accessToken: accessToken,
+      ),
+    );
+  }
+
+  /// Email + password login (TJ Earn-style, v1.0.4). Signs into the
+  /// existing email account. Throws [AuthException] on wrong
+  /// credentials ("Invalid login credentials").
+  static Future<AuthResponse> signInWithPassword({
+    required String email,
+    required String password,
+  }) {
+    return _guard(
+      () => client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      ),
+    );
+  }
+
+  /// Email + password register (TJ Earn-style, v1.0.4). Creates a
+  /// fresh account — used only when there is NO session at all. When
+  /// an anonymous user exists, [convertAnonymousToEmail] is the
+  /// register path instead, so its coins survive. "Confirm email" is
+  /// OFF in this project (verified 15 Nov 2026: signUp returns a
+  /// session immediately), so registration signs the user in at once.
+  /// Throws [AuthException] when the email is already registered.
+  static Future<AuthResponse> signUpWithEmail({
+    required String email,
+    required String password,
+  }) {
+    return _guard(
+      () => client.auth.signUp(email: email, password: password),
+    );
+  }
+
+  /// Convert the CURRENT anonymous user into a permanent email
+  /// account (same user.id — coins survive). This is the register
+  /// path when the app already has an anonymous session (fresh
+  /// install / v1.0.2 upgrade). Throws [AuthException] when the
+  /// email is already registered to another user.
+  static Future<UserResponse> convertAnonymousToEmail({
+    required String email,
+    required String password,
+  }) {
+    return _guard(
+      () => client.auth.updateUser(
+        UserAttributes(email: email, password: password),
       ),
     );
   }

@@ -238,7 +238,15 @@ class GoogleAuthService {
       );
     } on AuthException catch (e) {
       final msg = e.message.toLowerCase();
-      if (msg.contains('already') && msg.contains('link')) {
+      // Supabase reports an already-registered email as "A user with
+      // this email address has already been registered" (no "link" in
+      // it) — that is the same already-linked-elsewhere case: the
+      // Google account already owns a Supabase user (the old TJ Earn
+      // email sign-ups share this project — 26 confirmed email users,
+      // incl. mithubhattijani@gmail.com + jaanirecords2@gmail.com from
+      // 29 Oct 2026), so fall back to signing into that user.
+      if (msg.contains('already') &&
+          (msg.contains('link') || msg.contains('register'))) {
         return const _LinkResult(
           ok: false,
           alreadyLinkedElsewhere: true,
