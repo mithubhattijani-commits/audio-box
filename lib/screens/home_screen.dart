@@ -13,13 +13,11 @@ import '../widgets/news_ticker.dart';
 import 'article_listen_screen.dart';
 import 'article_webview_screen.dart';
 import 'audio_trimmer_screen.dart';
-import 'audio_video_tools_screen.dart';
 import 'briefing_screen.dart';
 import 'caption_generator_screen.dart';
 import 'caption_translator_screen.dart';
 import 'converter_screen.dart';
 import 'speech_writer_screen.dart';
-import 'tts_screen.dart';
 import 'video_caption_maker_screen.dart';
 
 /// Home: live ticker, announcement, sponsored ad, coin balance, tools
@@ -114,14 +112,40 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
       _Tool(
-        icon: Icons.video_library,
-        label: AppStrings.tr('audio_video_tools', locale),
+        icon: Icons.chat_bubble_outline,
+        label: AppStrings.tr('caption_generator', locale),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => AudioVideoToolsScreen(
+            builder: (_) => CaptionGeneratorScreen(coins: coins),
+          ),
+        ),
+      ),
+      _Tool(
+        icon: Icons.movie,
+        label: AppStrings.tr('video_caption_maker', locale),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => VideoCaptionMakerScreen(coins: coins),
+          ),
+        ),
+      ),
+      _Tool(
+        icon: Icons.translate,
+        label: AppStrings.tr('caption_translation', locale),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CaptionTranslatorScreen(coins: coins),
+          ),
+        ),
+      ),
+      _Tool(
+        icon: Icons.content_cut,
+        label: AppStrings.tr('audio_trimmer', locale),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AudioTrimmerScreen(
               coins: coins,
               library: library,
-              appLocale: appLocale,
             ),
           ),
         ),
@@ -348,120 +372,14 @@ class HomeScreen extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 16),
-                  // Audio & Video tools directly on Home (v1.0.8):
-                  // the same 4 dark cards as AudioVideoToolsScreen,
-                  // plus slots for the new v1.0.8 tools. Same dark
-                  // card style (dark-red icon square, RTL like the
-                  // tools page). The "Audio & Video Tools" grid tile
-                  // above still opens the full tools page.
+                  const SizedBox(height: 8),
                   Text(
-                    AppStrings.tr('audio_video_tools', locale),
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 12),
-                  Directionality(
-                    textDirection: TextDirection.rtl,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _AvToolCard(
-                          icon: Icons.campaign,
-                          title: 'Text to Speech',
-                          subtitle: 'متن کو آواز میں بدلیں',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => TtsScreen(
-                                coins: coins,
-                                library: library,
-                                appLocale: appLocale,
-                              ),
-                            ),
-                          ),
-                        ),
-                        _AvToolCard(
-                          icon: Icons.music_note,
-                          title: 'Audio Converter',
-                          subtitle: 'آڈیو کو WAV میں بدلیں',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  ConverterScreen(library: library),
-                            ),
-                          ),
-                        ),
-                        _AvToolCard(
-                          icon: Icons.chat_bubble_outline,
-                          title: 'AI Caption Generator',
-                          subtitle:
-                              'ویڈیو کے خودکار کیپشنز + 11 اسٹائل + فونٹس',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  CaptionGeneratorScreen(coins: coins),
-                            ),
-                          ),
-                        ),
-                        _AvToolCard(
-                          icon: Icons.movie,
-                          title: 'Video Caption Maker (AI)',
-                          subtitle:
-                              'خودکار کیپشن + 11 اسٹائل + فونٹس + SRT/ASS — ویڈیو پر پیش نظارہ',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  VideoCaptionMakerScreen(coins: coins),
-                            ),
-                          ),
-                        ),
-                        _AvToolCard(
-                          icon: Icons.translate,
-                          title: 'Caption Translation',
-                          subtitle: 'کیپشنز کا اردو ↔ انگریزی ترجمہ',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  CaptionTranslatorScreen(coins: coins),
-                            ),
-                          ),
-                        ),
-                        _AvToolCard(
-                          icon: Icons.content_cut,
-                          title: 'Audio Trimmer + Joiner',
-                          subtitle: 'آڈیو کاٹیں اور جوڑیں',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => AudioTrimmerScreen(
-                                coins: coins,
-                                library: library,
-                              ),
-                            ),
-                          ),
-                        ),
-                        _AvToolCard(
-                          icon: Icons.tune,
-                          title: 'TTS Controls',
-                          subtitle: 'آواز کی رفتار اور وقفے',
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => TtsScreen(
-                                coins: coins,
-                                library: library,
-                                appLocale: appLocale,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          locale.languageCode == 'ur'
-                              ? 'کیپشنز پر فی منٹ 50 کوائنز لگتے ہیں۔'
-                              : 'Captions cost 50 coins per minute of media.',
-                          style: const TextStyle(
-                              color: Colors.grey, fontSize: 12),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
+                    locale.languageCode == 'ur'
+                        ? 'کیپشنز پر فی منٹ 50 کوائنز لگتے ہیں۔'
+                        : 'Captions cost 50 coins per minute of media.',
+                    style:
+                        const TextStyle(color: Colors.grey, fontSize: 12),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
                   // Advertising banner (v1.0.6): chairman's photo +
@@ -579,86 +497,4 @@ class _Tool {
   final VoidCallback onTap;
 
   const _Tool({required this.icon, required this.label, required this.onTap});
-}
-
-/// Dark audio/video tool card — mirrors
-/// AudioVideoToolsScreen._ToolCard (dark #1E1E1E card, dark-red icon
-/// square, white bold title + grey Urdu subtitle, chevron).
-class _AvToolCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _AvToolCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF7F1D1D),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 28),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(
-                  Icons.chevron_left,
-                  color: Colors.grey,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

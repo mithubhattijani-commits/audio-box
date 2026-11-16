@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../l10n/strings.dart';
 import '../services/ads_service.dart';
+import '../services/audio_download_service.dart';
 import '../services/audio_library_service.dart';
 import '../services/coins_service.dart';
 import 'tts_screen.dart';
@@ -75,6 +78,24 @@ class _SpeechWriterScreenState extends State<SpeechWriterScreen> {
           initialLang: 'ur',
         ),
       ),
+    );
+  }
+
+  /// Download the written speech as a .txt file (v1.0.9): ONE rewarded
+  /// ad first, then the file saves to Downloads — same fail-soft gate
+  /// as TTS Studio.
+  Future<void> _downloadSpeech() async {
+    final text = _speechController.text.trim();
+    if (text.isEmpty) return;
+    final topic = _topicController.text.trim();
+    final slug = topic
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    await AudioDownloadService.downloadBytesWithAd(
+      context,
+      fileName: slug.isEmpty ? 'speech.txt' : 'speech-$slug.txt',
+      bytes: utf8.encode(text),
     );
   }
 
@@ -157,6 +178,16 @@ class _SpeechWriterScreenState extends State<SpeechWriterScreen> {
               icon: const Icon(Icons.mic),
               label: Text(AppStrings.tr('send_to_tts', locale)),
             ),
+            if (_speechController.text.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _downloadSpeech,
+                icon: const Icon(Icons.download),
+                label: Text(
+                  '${AppStrings.tr('download', locale)} .txt (1 ad)',
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             const Text(
               'v1 writes speeches from local templates. AI-written speeches are a follow-up.',

@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../l10n/strings.dart';
+import '../models/audio_item.dart';
 import '../models/tts_voice.dart';
 import '../services/ads_service.dart';
+import '../services/audio_download_service.dart';
 import '../services/audio_library_service.dart';
 import '../services/coins_service.dart';
 import '../services/rss_service.dart';
@@ -42,6 +44,7 @@ class _ArticleListenScreenState extends State<ArticleListenScreen> {
   TtsVoice _voice = TtsVoice.byId('aoede');
   String? _playingTitle;
   File? _playingFile;
+  AudioItem? _playingItem;
   bool _busy = false;
   String? _note;
 
@@ -119,6 +122,7 @@ class _ArticleListenScreenState extends State<ArticleListenScreen> {
         }
       }
       File? firstFile;
+      AudioItem? firstItem;
       for (var i = 0; i < chunks.length; i++) {
         final chunk = chunks[i];
         final ext = _voice.engine == TtsEngine.gemini ? 'wav' : 'mp3';
@@ -130,6 +134,7 @@ class _ArticleListenScreenState extends State<ArticleListenScreen> {
             .toList();
         if (existing.isNotEmpty) {
           file = File(existing.first.filePath);
+          firstItem ??= existing.first;
         } else if (await cacheFile.exists()) {
           final saved = await widget.library.save(
             title: article.title,
@@ -141,6 +146,7 @@ class _ArticleListenScreenState extends State<ArticleListenScreen> {
             chunkCount: chunks.length,
           );
           file = File(saved.filePath);
+          firstItem ??= saved;
         } else {
           final gen = await _tts.generateChunkWithFallback(
             chunk,
@@ -158,6 +164,7 @@ class _ArticleListenScreenState extends State<ArticleListenScreen> {
             chunkCount: chunks.length,
           );
           file = File(saved.filePath);
+          firstItem ??= saved;
         }
         firstFile ??= file;
         await widget.coins.recordGeneration();
@@ -166,6 +173,7 @@ class _ArticleListenScreenState extends State<ArticleListenScreen> {
         setState(() {
           _playingTitle = article.title;
           _playingFile = firstFile;
+          _playingItem = firstItem;
         });
       }
     } catch (e) {
@@ -249,9 +257,31 @@ class _ArticleListenScreenState extends State<ArticleListenScreen> {
                             Card(
                               child: Padding(
                                 padding: const EdgeInsets.all(8),
-                                child: AudioPlayerBar(
-                                  file: _playingFile,
-                                  title: _playingTitle!,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    AudioPlayerBar(
+                                      file: _playingFile,
+                                      title: _playingTitle!,
+                                    ),
+                                    if (_playingItem != null)
+                                      TextButton.icon(
+                                        onPressed: () =>
+                                            AudioDownloadService
+                                                .downloadWithAd(
+                                          context,
+                                          _playingItem!,
+                                        ),
+                                        icon: const Icon(
+                                          Icons.download,
+                                          size: 18,
+                                        ),
+                                        label: Text(
+                                          '${AppStrings.tr('download', locale)} (1 ad)',
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),
