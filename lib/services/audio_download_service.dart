@@ -16,9 +16,10 @@ import 'remote_config_service.dart';
 /// right now, the file downloads directly — the user is never blocked
 /// from their own audio. If the user skips the ad, nothing downloads.
 ///
-/// Caption downloads (SRT/ASS, v1.0.6) use a TWO-ad gate instead
-/// ([downloadBytesWithTwoAds]): two rewarded ads back-to-back, both
-/// must complete, skip either = no delivery.
+/// Caption downloads (SRT/ASS, v1.0.6) use a multi-ad gate instead
+/// ([downloadBytesWithAds]): the number of rewarded ads comes from
+/// the remote config (`download.ads_required`, default 2, NO upper
+/// limit) and ALL must complete — skip any one = no delivery.
 ///
 /// ONE ad flow only: [_playRewardedAdGate] is the single gate every
 /// download path goes through — saved audio ([downloadWithAd]), raw
@@ -72,22 +73,48 @@ class AudioDownloadService {
     await _saveBytes(context, fileName: fileName, bytes: bytes);
   }
 
+  /// Download bytes through the N-ad gate (caption downloads,
+  /// v1.0.7, user order 16 Nov): [adsRequired] rewarded ads
+  /// back-to-back and ALL must be watched fully. NO upper limit on
+  /// [adsRequired] — any number from the remote config works (ads ki
+  /// koi limit ni). 0 = no ad, the file saves directly. If the user
+  /// skips ANY ad, nothing is delivered — they must tap download
+  /// again and watch all ads again from the start. Fail-soft only
+  /// when ads are off or no ad loads (the gate itself returns true
+  /// then).
+  static Future<void> downloadBytesWithAds(
+    BuildContext context, {
+    required int adsRequired,
+    required String fileName,
+    required List<int> bytes,
+  }) async {
+    for (var i = 0; i < adsRequired; i++) {
+      if (!await _playRewardedAdGate(context)) return; // Ad skipped.
+      if (!context.mounted) return;
+    }
+    await _saveBytes(context, fileName: fileName, bytes: bytes);
+  }
+
   /// Download bytes through the TWO-ad gate (caption downloads,
   /// v1.0.6, user order 16 Nov): two rewarded ads back-to-back and
   /// BOTH must be watched fully. If the user skips EITHER ad, nothing
   /// is delivered — they must tap download again and watch both ads
   /// again from the start. Fail-soft only when ads are off or no ad
   /// loads (the gate itself returns true then).
+  ///
+  /// Kept for compatibility; new code should use
+  /// [downloadBytesWithAds] with the remote-config count.
   static Future<void> downloadBytesWithTwoAds(
     BuildContext context, {
     required String fileName,
     required List<int> bytes,
   }) async {
-    if (!await _playRewardedAdGate(context)) return; // Ad 1 skipped.
-    if (!context.mounted) return;
-    if (!await _playRewardedAdGate(context)) return; // Ad 2 skipped.
-    if (!context.mounted) return;
-    await _saveBytes(context, fileName: fileName, bytes: bytes);
+    await downloadBytesWithAds(
+      context,
+      adsRequired: 2,
+      fileName: fileName,
+      bytes: bytes,
+    );
   }
 
   static Future<void> _saveBytes(

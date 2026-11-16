@@ -12,6 +12,7 @@ import '../services/audio_download_service.dart';
 import '../services/caption_service.dart';
 import '../services/caption_styles.dart';
 import '../services/coins_service.dart';
+import '../services/remote_config_service.dart';
 import '../widgets/caption_style_picker.dart';
 import '../widgets/help_whatsapp_button.dart';
 import '../widgets/styled_caption_text.dart';
@@ -196,8 +197,10 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
     final base = name.contains('.')
         ? name.substring(0, name.lastIndexOf('.'))
         : name;
-    await AudioDownloadService.downloadBytesWithTwoAds(
+    await AudioDownloadService.downloadBytesWithAds(
       context,
+      adsRequired:
+          RemoteConfigService.instance.config.downloadAdsRequired,
       fileName: '$base.srt',
       bytes: utf8.encode(CaptionService.buildSrt(_segments)),
     );
@@ -209,8 +212,10 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
     final base = name.contains('.')
         ? name.substring(0, name.lastIndexOf('.'))
         : name;
-    await AudioDownloadService.downloadBytesWithTwoAds(
+    await AudioDownloadService.downloadBytesWithAds(
       context,
+      adsRequired:
+          RemoteConfigService.instance.config.downloadAdsRequired,
       fileName: '$base.ass',
       bytes: utf8.encode(
         CaptionService.buildAss(

@@ -312,23 +312,29 @@ for audio, file-size estimate as a last resort); the cost preview
 shows before the user taps Transcribe.
 
 **Ads (both caption tools, identical):** the SRT/ASS file delivery goes
-through the `AudioDownloadService` TWO-ad gate
-(`downloadBytesWithTwoAds`, same private gate as `downloadWithAd`,
-run twice): 2 rewarded video ads play back-to-back and BOTH must be
-watched fully, then the `.srt`/`.ass` saves to the phone's Download
-folder; fail-soft only when ads are off or no ad loads; if the user
-skips EITHER ad, nothing is delivered and they must tap download
-again and watch both ads again from the start. A notice above the
-download buttons says so in the user's words: "ویڈیو ڈاؤن لوڈ کرنے
+through the `AudioDownloadService` multi-ad gate
+(`downloadBytesWithAds`, same private gate as `downloadWithAd`, run
+N times): the number of rewarded video ads comes from the remote
+config (`download.ads_required` in `audio-box.json`, default 2, NO
+upper limit — user order 16 Nov: ads ki koi limit ni; 0 = no ad) and
+ALL must be watched fully, then the `.srt`/`.ass` saves to the phone's
+Download folder; fail-soft only when ads are off or no ad loads; if
+the user skips ANY ad, nothing is delivered and they must tap
+download again and watch all ads again from the start. A notice above
+the download buttons says so in the user's words: "ویڈیو ڈاؤن لوڈ کرنے
 کے لیے ایڈ کو مکمل دیکھیں — اگر ایک ایڈ دیکھی اور دوسری نہ دیکھی تو
-ویڈیو ڈاؤن لوڈ نہیں ہوگی۔" Copying captions is free (no ad). Viewing
-the captions and the in-player preview costs no ad.
+ویڈیو ڈاؤن لوڈ نہیں ہوگی۔" (worded for the default 2 ads; if the
+configured count changes, the notice wording needs a matching update).
+Copying captions is free (no ad). Viewing the captions and the
+in-player preview costs no ad.
 
-**Advertising banner + WhatsApp help (v1.0.6):** the home screen
+**Advertising banner + WhatsApp help (v1.0.6, remote on/off v1.0.7):** the home screen
 shows an advertising banner with the chairman's photo
 (`assets/images/owner.jpg`) and the line "ایڈورٹائزنگ کروانے کے لیے
 رابطہ کریں" + a WhatsApp button (Rai Ghulam Jilani Bhatti,
-03090808180 → https://wa.me/923090808180). A "For Help" row with
+03090808180 → https://wa.me/923090808180). The banner shows only
+when `advertising_banner.enabled` is true in `audio-box.json`
+(default true). A "For Help" row with
 the same WhatsApp button sits at the very END of the home screen and
 both caption screens, for users who need any guideline.
 

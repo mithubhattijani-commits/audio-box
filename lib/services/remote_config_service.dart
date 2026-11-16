@@ -294,6 +294,8 @@ class RemoteConfig {
     this.splash = const SplashConfig(),
     this.tickerDirection = 'from_left',
     this.ribbon = const RibbonConfig(),
+    this.downloadAdsRequired = 2,
+    this.advertisingBannerEnabled = true,
   });
 
   /// Master switch for ALL Unity ads.
@@ -330,6 +332,17 @@ class RemoteConfig {
 
   /// Ribbon bar under the Home news ticker (remote-controlled).
   final RibbonConfig ribbon;
+
+  /// How many rewarded ads the SRT/ASS caption download must play,
+  /// back-to-back, before the file is delivered (v1.0.7, user order
+  /// 16 Nov 2026). NO upper limit — any number from the website
+  /// config works; 0 = no ad, direct download. Default 2 (the v1.0.6
+  /// two-ad rule). Skip ANY ad = no delivery.
+  final int downloadAdsRequired;
+
+  /// Home-screen advertising banner (chairman's photo + WhatsApp).
+  /// Off hides the banner; the Help row at the bottom stays.
+  final bool advertisingBannerEnabled;
 
   bool bannerEnabled(String zone) => adsEnabled && (banners[zone] == true);
 
@@ -383,6 +396,23 @@ class RemoteConfig {
       }
     }
 
+    // Caption-download ad count (v1.0.7): any whole number, NO cap.
+    // 0 = no ad, direct download. Anything else invalid falls back
+    // to the v1.0.6 default of 2.
+    var downloadAdsRequired = 2;
+    if (j['download'] is Map<String, dynamic>) {
+      final n = (j['download'] as Map<String, dynamic>)['ads_required'];
+      if (n is num) {
+        final v = n.toInt();
+        if (v >= 0) downloadAdsRequired = v;
+      }
+    }
+    final advertisingBannerEnabled =
+        (j['advertising_banner'] is Map<String, dynamic>)
+            ? (j['advertising_banner'] as Map<String, dynamic>)['enabled'] !=
+                false
+            : true;
+
     return RemoteConfig(
       adsEnabled: j['ads_enabled'] != false,
       banners: banners,
@@ -424,6 +454,8 @@ class RemoteConfig {
       ribbon: j['ribbon'] is Map<String, dynamic>
           ? RibbonConfig.fromJson(j['ribbon'] as Map<String, dynamic>)
           : const RibbonConfig(),
+      downloadAdsRequired: downloadAdsRequired,
+      advertisingBannerEnabled: advertisingBannerEnabled,
     );
   }
 }

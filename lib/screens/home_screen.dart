@@ -344,8 +344,21 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   // Advertising banner (v1.0.6): chairman's photo +
-                  // contact line for advertising in the app.
-                  AdvertisingBanner(lang: locale.languageCode),
+                  // contact line for advertising in the app. Remote
+                  // on/off from the website (v1.0.7):
+                  // advertising_banner.enabled, default on.
+                  ValueListenableBuilder<RemoteConfig>(
+                    valueListenable:
+                        RemoteConfigService.instance.notifier,
+                    builder: (context, cfg, _) {
+                      if (!cfg.advertisingBannerEnabled) {
+                        return const SizedBox.shrink();
+                      }
+                      return AdvertisingBanner(
+                        lang: locale.languageCode,
+                      );
+                    },
+                  ),
                   const SizedBox(height: 20),
                   // Latest articles (RSS feed) — tap opens the full page
                   // on nigraantv.xyz with its banner ads. Free, no coins.
