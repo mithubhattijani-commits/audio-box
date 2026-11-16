@@ -247,7 +247,7 @@ class CaptionService {
         : '&H80000000';
     final buf = StringBuffer();
     buf.writeln('[Script Info]');
-    buf.writeln('Title: Audio Box Captions');
+    buf.writeln('Title: Magic Box Captions');
     buf.writeln('ScriptType: v4.00+');
     buf.writeln('WrapStyle: 0');
     buf.writeln('ScaledBorderAndShadow: yes');

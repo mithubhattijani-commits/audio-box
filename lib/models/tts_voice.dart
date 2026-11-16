@@ -61,6 +61,45 @@ class TtsVoice {
       apiVoice: 'ur-PK-UzmaNeural',
       isPremium: false,
     ),
+    // v1.0.8 — more Gemini voices. GATE: these only appear once BOTH
+    // (a) the TTS proxy Worker's ALLOWED_VOICES includes the voice
+    // name (today it allows only Aoede/Charon — a one-line Worker
+    // change, no new keys) AND (b) the remote config tts.voices lists
+    // the id (audio-box.json). Until then availableVoices() filters
+    // them out, so they are invisible and cannot fail. Display labels
+    // are person names only — no provider/model names in the UI.
+    TtsVoice(
+      id: 'kore',
+      label: 'Noor',
+      gender: 'Female',
+      engine: TtsEngine.gemini,
+      apiVoice: 'Kore',
+      isPremium: true,
+    ),
+    TtsVoice(
+      id: 'fenrir',
+      label: 'Veer',
+      gender: 'Male',
+      engine: TtsEngine.gemini,
+      apiVoice: 'Fenrir',
+      isPremium: true,
+    ),
+    TtsVoice(
+      id: 'puck',
+      label: 'Chand',
+      gender: 'Male',
+      engine: TtsEngine.gemini,
+      apiVoice: 'Puck',
+      isPremium: true,
+    ),
+    TtsVoice(
+      id: 'zephyr',
+      label: 'Hawa',
+      gender: 'Female',
+      engine: TtsEngine.gemini,
+      apiVoice: 'Zephyr',
+      isPremium: true,
+    ),
   ];
 
   static TtsVoice byId(String id) =>

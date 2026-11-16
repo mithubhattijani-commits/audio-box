@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../services/ads_service.dart';
 import '../services/audio_library_service.dart';
 import '../services/coins_service.dart';
+import 'audio_trimmer_screen.dart';
 import 'caption_generator_screen.dart';
+import 'caption_translator_screen.dart';
 import 'converter_screen.dart';
 import 'tts_screen.dart';
 import 'video_caption_maker_screen.dart';
@@ -98,6 +100,31 @@ class AudioVideoToolsScreen extends StatelessWidget {
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => VideoCaptionMakerScreen(coins: coins),
+                  ),
+                ),
+              ),
+              // v1.0.8 — free tools: on-device caption translation and
+              // audio trim/join (no server, no paid API, no coins).
+              _ToolCard(
+                icon: Icons.translate,
+                title: 'Caption Translator',
+                subtitle: 'اردو ↔ English کیپشنز کا ترجمہ — 25 کوائنز فی منٹ',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => CaptionTranslatorScreen(coins: coins),
+                  ),
+                ),
+              ),
+              _ToolCard(
+                icon: Icons.content_cut,
+                title: 'Audio Trimmer & Joiner',
+                subtitle: 'آڈیو کاٹیں اور جوڑیں — مفت، WAV + MP3',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AudioTrimmerScreen(
+                      coins: coins,
+                      library: library,
+                    ),
                   ),
                 ),
               ),

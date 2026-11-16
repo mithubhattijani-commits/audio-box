@@ -111,7 +111,7 @@ class UpdaterService {
                 if (versionName.isNotEmpty) versionName,
                 if (notes.isNotEmpty) notes,
                 if (forced)
-                  'This version is no longer supported. Please update to continue using Audio Box.',
+                  'This version is no longer supported. Please update to continue using Magic Box.',
               ].join('\n\n').trim(),
             ),
             actions: [

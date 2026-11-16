@@ -9,6 +9,7 @@ import '../services/audio_download_service.dart';
 import '../services/audio_library_service.dart';
 import '../services/coins_service.dart';
 import '../services/remote_config_service.dart';
+import '../services/tts_processing.dart';
 import '../services/tts_service.dart';
 import '../widgets/audio_player_bar.dart';
 
@@ -47,6 +48,15 @@ class _TtsScreenState extends State<TtsScreen> {
   bool _busy = false;
   String? _note;
   List<AudioItem> _results = [];
+
+  // v1.0.8 — voice controls (on-device WAV processing, free):
+  // speed (resample) + pause between sentences (silence). Apply to
+  // Gemini voices only (WAV); Edge voices return MP3 and ignore them.
+  double _speed = 1.0;
+  double _pauseSeconds = 0.0;
+
+  TtsControls get _controls =>
+      TtsControls(speed: _speed, pauseSeconds: _pauseSeconds);
 
   @override
   void initState() {
@@ -88,6 +98,8 @@ class _TtsScreenState extends State<TtsScreen> {
     if (chunks.isEmpty) return;
 
     // Cached chunks are free: only uncached chunks cost coins.
+    // The cache key includes the voice controls, so a 1.25x file is
+    // never confused with the 1.0x file of the same text.
     var uncached = 0;
     for (final chunk in chunks) {
       final cached = await TtsService.cacheFile(
@@ -95,10 +107,13 @@ class _TtsScreenState extends State<TtsScreen> {
         voice,
         _lang,
         voice.engine == TtsEngine.gemini ? 'wav' : 'mp3',
+        speed: _speed,
+        pauseSeconds: _pauseSeconds,
       );
-      final inLibrary = widget.library.items.any(
-        (i) => i.text == chunk && i.voiceId == voice.id,
-      );
+      final inLibrary = _controls.isDefault &&
+          widget.library.items.any(
+            (i) => i.text == chunk && i.voiceId == voice.id,
+          );
       if (!await cached.exists() && !inLibrary) uncached++;
     }
     final cost = uncached * widget.coins.coinsPerMinute;
@@ -127,12 +142,20 @@ class _TtsScreenState extends State<TtsScreen> {
       for (var i = 0; i < chunks.length; i++) {
         final chunk = chunks[i];
         final ext = voice.engine == TtsEngine.gemini ? 'wav' : 'mp3';
-        final cacheFile =
-            await TtsService.cacheFile(chunk, voice, _lang, ext);
+        final cacheFile = await TtsService.cacheFile(
+          chunk,
+          voice,
+          _lang,
+          ext,
+          speed: _speed,
+          pauseSeconds: _pauseSeconds,
+        );
         AudioItem item;
-        final existing = widget.library.items
-            .where((e) => e.text == chunk && e.voiceId == voice.id)
-            .toList();
+        final existing = _controls.isDefault
+            ? widget.library.items
+                .where((e) => e.text == chunk && e.voiceId == voice.id)
+                .toList()
+            : <AudioItem>[];
         if (existing.isNotEmpty) {
           item = existing.first;
         } else if (await cacheFile.exists()) {
@@ -152,13 +175,26 @@ class _TtsScreenState extends State<TtsScreen> {
             lang: _lang,
           );
           if (gen.fellBackToEdge) fellBack = true;
-          await cacheFile.writeAsBytes(gen.bytes);
+          // Voice controls (v1.0.8): speed + pauses are applied to
+          // the Gemini WAV here, on-device, before saving. Edge MP3
+          // output skips them (no decoder on-device).
+          var bytes = gen.bytes;
+          var outExt = gen.ext;
+          if (gen.ext == 'wav' && !_controls.isDefault) {
+            bytes = applyTtsControls(
+              gen.bytes,
+              text: chunk,
+              controls: _controls,
+            );
+            outExt = 'wav';
+          }
+          await cacheFile.writeAsBytes(bytes);
           item = await widget.library.save(
             title: _titleFor(text),
             text: chunk,
             voice: voice,
-            bytes: gen.bytes,
-            ext: gen.ext,
+            bytes: bytes,
+            ext: outExt,
             chunkIndex: i + 1,
             chunkCount: chunks.length,
           );
@@ -255,6 +291,57 @@ class _TtsScreenState extends State<TtsScreen> {
               onChanged: (v) {
                 if (v != null) setState(() => _voice = v);
               },
+            ),
+            const SizedBox(height: 12),
+            // v1.0.8 — voice controls (free, on-device). They apply to
+            // Billo / Jaani (Gemini WAV) voices; Asad / Uzma return
+            // MP3, which cannot be re-processed on-device.
+            Text(
+              'Voice controls',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            Row(
+              children: [
+                const Text('Speed'),
+                Expanded(
+                  child: Slider(
+                    value: _speed,
+                    min: 0.5,
+                    max: 2.0,
+                    divisions: 15,
+                    label: '${_speed.toStringAsFixed(2)}x',
+                    onChanged: _effectiveVoice.engine == TtsEngine.edge
+                        ? null
+                        : (v) => setState(() => _speed = v),
+                  ),
+                ),
+                Text('${_speed.toStringAsFixed(2)}x'),
+              ],
+            ),
+            Row(
+              children: [
+                const Text('Pause'),
+                Expanded(
+                  child: Slider(
+                    value: _pauseSeconds,
+                    min: 0,
+                    max: 2.0,
+                    divisions: 8,
+                    label: '${_pauseSeconds.toStringAsFixed(2)}s',
+                    onChanged: _effectiveVoice.engine == TtsEngine.edge
+                        ? null
+                        : (v) => setState(() => _pauseSeconds = v),
+                  ),
+                ),
+                Text('${_pauseSeconds.toStringAsFixed(2)}s'),
+              ],
+            ),
+            Text(
+              _effectiveVoice.engine == TtsEngine.edge
+                  ? 'Controls need a Billo / Jaani voice (Asad / Uzma return MP3).'
+                  : 'Speed also changes the pitch. Pause adds silence '
+                      'between sentences. Same price — no extra coins.',
+              style: const TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 12),
             ValueListenableBuilder<RemoteConfig>(

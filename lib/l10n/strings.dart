@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 class AppStrings {
   static const Map<String, Map<String, String>> _values = {
     'app_name': {
-      'en': 'Audio Box From Jaani',
-      'ur': 'آڈیو باکس — جانی',
+      'en': 'Magic Box From Jaani',
+      'ur': 'میجک باکس — جانی',
     },
     'home': {'en': 'Home', 'ur': 'ہوم'},
     'tts_studio': {'en': 'TTS Studio', 'ur': 'ٹی ٹی ایس اسٹوڈیو'},

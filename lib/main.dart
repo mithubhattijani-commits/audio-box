@@ -70,7 +70,7 @@ class _AudioBoxAppState extends State<AudioBoxApp> {
       valueListenable: appLocale,
       builder: (context, locale, _) {
         return MaterialApp(
-          title: 'Audio Box From Jaani',
+          title: 'Magic Box From Jaani',
           locale: locale,
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,

@@ -95,6 +95,35 @@ class AudioLibraryService {
     return item;
   }
 
+  /// Save trimmed/joined bytes as a library item (v1.0.8). Unlike
+  /// [save], there is no TTS voice — the file comes from the device,
+  /// so voiceId/engine are 'local' and the text is empty. Returns the
+  /// created item.
+  Future<AudioItem> saveFile({
+    required String title,
+    required List<int> bytes,
+    required String ext,
+  }) async {
+    await load();
+    final dir = await _docsDir();
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final file = File('${dir.path}/$id.$ext');
+    await file.writeAsBytes(bytes);
+    final item = AudioItem(
+      id: id,
+      title: title,
+      text: '',
+      voiceId: 'local',
+      engine: 'local',
+      filePath: file.path,
+      ext: ext,
+      createdAtMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    _items.insert(0, item);
+    await _saveIndex();
+    return item;
+  }
+
   Future<void> delete(AudioItem item) async {
     await load();
     try {

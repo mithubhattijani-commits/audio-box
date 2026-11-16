@@ -16,6 +16,7 @@ import '../services/remote_config_service.dart';
 import '../widgets/caption_style_picker.dart';
 import '../widgets/help_whatsapp_button.dart';
 import '../widgets/styled_caption_text.dart';
+import 'caption_translator_screen.dart';
 
 /// AI Caption Generator (v1.0.3 batch 2, styles in v1.0.6): pick an
 /// audio or video file, transcribe it via the proxy's POST /transcribe,
@@ -493,6 +494,21 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
                     onPressed: _saveAss,
                     icon: const Icon(Icons.style, size: 18),
                     label: const Text('Save ASS'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => CaptionTranslatorScreen(
+                          coins: widget.coins,
+                          segments: _segments,
+                          sourceLang: _lang,
+                          mediaDuration: _duration,
+                          fileName: _fileName,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.translate, size: 18),
+                    label: const Text('Translate'),
                   ),
                 ],
               ),

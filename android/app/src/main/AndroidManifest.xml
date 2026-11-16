@@ -2,7 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
-        android:label="Audio Box From Jaani"
+        android:label="Magic Box From Jaani"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

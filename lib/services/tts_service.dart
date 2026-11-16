@@ -247,17 +247,29 @@ class TtsService {
 
   /// On-device cache: same text + voice + lang always returns the same
   /// file, so repeat generations cost no coins and no quota.
+  /// v1.0.8: [speed]/[pauseSeconds] (TTS controls) are part of the
+  /// key — a 1.25x file must never collide with the 1.0x file.
   static Future<File> cacheFile(
     String text,
     TtsVoice voice,
     String lang,
-    String ext,
-  ) async {
+    String ext, {
+    double speed = 1.0,
+    double pauseSeconds = 0.0,
+  }) async {
     final dir = await getApplicationDocumentsDirectory();
     final cacheDir = Directory('${dir.path}/audio_cache');
     if (!await cacheDir.exists()) await cacheDir.create(recursive: true);
-    final hash =
-        sha256.convert(utf8.encode('${voice.engine.name}|${voice.id}|$lang|$text')).toString();
+    final controls = (speed - 1.0).abs() < 0.001 && pauseSeconds <= 0
+        ? ''
+        : '|s${speed.toStringAsFixed(2)}|p${pauseSeconds.toStringAsFixed(1)}';
+    final hash = sha256
+        .convert(
+          utf8.encode(
+            '${voice.engine.name}|${voice.id}|$lang|$text$controls',
+          ),
+        )
+        .toString();
     return File('${cacheDir.path}/$hash.$ext');
   }
 }

@@ -16,6 +16,7 @@ import '../services/remote_config_service.dart';
 import '../widgets/caption_style_picker.dart';
 import '../widgets/help_whatsapp_button.dart';
 import '../widgets/styled_caption_text.dart';
+import 'caption_translator_screen.dart';
 
 /// Video Caption Maker (AI) (v1.0.3 batch 2, styles in v1.0.6): pick a
 /// video file, transcribe its audio via the proxy's POST /transcribe,
@@ -530,6 +531,21 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
                     onPressed: _saveAss,
                     icon: const Icon(Icons.style, size: 18),
                     label: const Text('Save ASS'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => CaptionTranslatorScreen(
+                          coins: widget.coins,
+                          segments: _segments,
+                          sourceLang: _lang,
+                          mediaDuration: _duration,
+                          fileName: _fileName,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.translate, size: 18),
+                    label: const Text('Translate'),
                   ),
                 ],
               ),

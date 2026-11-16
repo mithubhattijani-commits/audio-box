@@ -130,13 +130,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Audio Box From Jaani',
+                  'Magic Box From Jaani',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Sign in to use Audio Box.\n'
+                  'Sign in to use Magic Box.\n'
                   'Your coins stay with your account, so they '
                   'are safe even if you reinstall the app.',
                   textAlign: TextAlign.center,
