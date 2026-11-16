@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -9,11 +10,21 @@ import '../l10n/strings.dart';
 import '../services/ads_service.dart';
 import '../services/audio_download_service.dart';
 import '../services/caption_service.dart';
+import '../services/caption_styles.dart';
 import '../services/coins_service.dart';
+import '../widgets/caption_style_picker.dart';
+import '../widgets/help_whatsapp_button.dart';
+import '../widgets/styled_caption_text.dart';
 
-/// AI Caption Generator (v1.0.3 batch 2): pick an audio or video file,
-/// transcribe it via the proxy's POST /transcribe, show the captions
-/// with timestamps, copy them, and save them as an SRT file.
+/// AI Caption Generator (v1.0.3 batch 2, styles in v1.0.6): pick an
+/// audio or video file, transcribe it via the proxy's POST /transcribe,
+/// then style the captions — 11 CapCut-style looks (Nigraan Karaoke,
+/// Bold Pop, Pop Up, Karaoke Fill, Highlight Box, Typewriter, One Word,
+/// Classic, News Ticker, Spotlight, Minimal), English + Urdu, with
+/// position / size / highlight-colour / font controls and a live animated
+/// preview. Caption lines can be edited (fix misheard words) or
+/// deleted. Exports: plain SRT + a styled ASS file (opens in CapCut
+/// and any ASS-capable editor, with the chosen look).
 ///
 /// COINS: 50 per minute of media (same rate as TTS generation), rounded
 /// up to whole minutes, minimum 50 — charged through the existing
@@ -21,7 +32,7 @@ import '../services/coins_service.dart';
 /// CaptionService.transcribeCharged; refunded in full if transcription
 /// fails). Too few coins → a message pointing at the Coins tab.
 ///
-/// SRT DELIVERY: the file save goes through the existing
+/// SRT/ASS DELIVERY: the file save goes through the existing
 /// AudioDownloadService.downloadBytesWithAd — 1 rewarded video ad,
 /// then the file saves to Downloads; fail-soft when ads are off or no
 /// ad loads; skip = no delivery. Copying captions is free (no ad).
@@ -45,8 +56,56 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
   String? _message;
   TranscriptionResult? _result;
 
+  // v1.0.6 — caption styling (editable segment list + style choices).
+  List<CaptionSegment> _segments = [];
+  CaptionStyle _style = CaptionStyles.all.first;
+  CaptionPosition _position = CaptionPosition.bottom;
+  CaptionSize _size = CaptionSize.medium;
+  int _highlight = CaptionStyles.green;
+  // Default font follows the default language (Urdu = Jameel Noori).
+  CaptionFont _font = CaptionFonts.jameelKasheeda;
+
+  // Live preview clock: loops through the segments.
+  Timer? _previewTimer;
+  double _previewSeconds = 0;
+
   int get _cost =>
       CaptionService.costForDuration(_duration, widget.coins.coinsPerMinute);
+
+  @override
+  void dispose() {
+    _previewTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startPreview() {
+    _previewTimer?.cancel();
+    _previewSeconds = 0;
+    _previewTimer = Timer.periodic(const Duration(milliseconds: 150), (_) {
+      if (!mounted || _segments.isEmpty) return;
+      setState(() {
+        _previewSeconds += 0.15;
+        final end = _segments.last.end;
+        if (_previewSeconds >= end) _previewSeconds = 0;
+      });
+    });
+  }
+
+  CaptionSegment? _previewSegment() {
+    if (_segments.isEmpty) return null;
+    for (final seg in _segments) {
+      if (_previewSeconds >= seg.start && _previewSeconds < seg.end) {
+        return seg;
+      }
+    }
+    return null;
+  }
+
+  Alignment _positionAlign() => switch (_position) {
+        CaptionPosition.top => Alignment.topCenter,
+        CaptionPosition.middle => Alignment.center,
+        CaptionPosition.bottom => Alignment.bottomCenter,
+      };
 
   Future<void> _pickFile() async {
     if (_busy) return;
@@ -74,6 +133,7 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
         _fileName = null;
         _duration = null;
         _result = null;
+        _segments = [];
         _message = 'File is too large — max 25 MB.';
       });
       return;
@@ -83,6 +143,7 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
       _fileName = picked.name;
       _duration = null;
       _result = null;
+      _segments = [];
       _message = null;
       _probing = true;
     });
@@ -123,7 +184,11 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
         duration: _duration,
       );
       if (!mounted) return;
-      setState(() => _result = result);
+      setState(() {
+        _result = result;
+        _segments = List.of(result.segments);
+      });
+      _startPreview();
     } on InsufficientCoinsException {
       if (!mounted) return;
       setState(
@@ -138,9 +203,10 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
   }
 
   Future<void> _copyCaptions() async {
-    final result = _result;
-    if (result == null) return;
-    await Clipboard.setData(ClipboardData(text: result.srt));
+    if (_segments.isEmpty) return;
+    await Clipboard.setData(
+      ClipboardData(text: CaptionService.buildSrt(_segments)),
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Captions copied.')),
@@ -148,17 +214,79 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
   }
 
   Future<void> _saveSrt() async {
-    final result = _result;
     final name = _fileName;
-    if (result == null || name == null) return;
+    if (_segments.isEmpty || name == null) return;
     final base = name.contains('.')
         ? name.substring(0, name.lastIndexOf('.'))
         : name;
-    await AudioDownloadService.downloadBytesWithAd(
+    await AudioDownloadService.downloadBytesWithTwoAds(
       context,
       fileName: '$base.srt',
-      bytes: utf8.encode(result.srt),
+      bytes: utf8.encode(CaptionService.buildSrt(_segments)),
     );
+  }
+
+  Future<void> _saveAss() async {
+    final name = _fileName;
+    if (_segments.isEmpty || name == null) return;
+    final base = name.contains('.')
+        ? name.substring(0, name.lastIndexOf('.'))
+        : name;
+    await AudioDownloadService.downloadBytesWithTwoAds(
+      context,
+      fileName: '$base.ass',
+      bytes: utf8.encode(
+        CaptionService.buildAss(
+          _segments,
+          _style,
+          position: _position,
+          size: _size,
+          highlightColor: _highlight,
+          fontFamily: _font.family,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editSegment(int index) async {
+    final seg = _segments[index];
+    final controller = TextEditingController(text: seg.text);
+    final edited = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          Localizations.localeOf(context).languageCode == 'ur'
+              ? 'کیپشن بدلیں'
+              : 'Edit caption',
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (edited == null || edited.isEmpty || !mounted) return;
+    setState(() {
+      _segments[index] = CaptionSegment(
+        start: seg.start,
+        end: seg.end,
+        text: edited,
+      );
+    });
   }
 
   String _durationLabel() {
@@ -173,6 +301,7 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
   Widget build(BuildContext context) {
     final locale = Localizations.localeOf(context);
     final result = _result;
+    final previewSeg = _previewSegment();
     return Scaffold(
       appBar: AppBar(
         title: Text(AppStrings.tr('caption_generator', locale)),
@@ -201,14 +330,21 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
                     ButtonSegment(value: 'en', label: Text('EN')),
                   ],
                   selected: {_lang},
-                  onSelectionChanged: (s) => setState(() => _lang = s.first),
+                  onSelectionChanged: (s) => setState(() {
+                    _lang = s.first;
+                    // Font follows the language: Urdu = Jameel Noori,
+                    // English = system font.
+                    _font = CaptionFonts.forLang(_lang).first;
+                  }),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             const Text(
               'Pick an audio or video file. Its speech is transcribed into '
-              'time-stamped captions — 50 coins per minute of media.',
+              'time-stamped captions — 50 coins per minute of media. Then '
+              'pick a caption style (11 styles, English + Urdu, Jameel '
+              'Noori + display fonts) and save as SRT or styled ASS.',
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
@@ -259,11 +395,82 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
             ],
             if (result != null) ...[
               const SizedBox(height: 16),
+              // Live animated preview of the styled captions.
+              Container(
+                height: 180,
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Align(
+                  alignment: _positionAlign(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: previewSeg == null
+                        ? const SizedBox.shrink()
+                        : StyledCaptionText(
+                            text: previewSeg.text,
+                            start: previewSeg.start,
+                            end: previewSeg.end,
+                            positionSeconds: _previewSeconds,
+                            style: _style,
+                            size: _size,
+                            highlightColor: _highlight,
+                            lang: _lang,
+                            fontFamily: _font.family,
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              CaptionStylePicker(
+                selected: _style,
+                lang: _lang,
+                onStyleSelected: (s) => setState(() {
+                  _style = s;
+                  _position = s.position;
+                  _highlight = s.highlightColor;
+                }),
+              ),
+              const SizedBox(height: 12),
+              CaptionStyleControls(
+                position: _position,
+                onPositionChanged: (p) => setState(() => _position = p),
+                size: _size,
+                onSizeChanged: (s) => setState(() => _size = s),
+                highlightColor: _highlight,
+                onHighlightChanged: (c) => setState(() => _highlight = c),
+                lang: _lang,
+                font: _font,
+                onFontChanged: (f) => setState(() => _font = f),
+              ),
+              const SizedBox(height: 16),
+              // Download notice, in the user's exact words: the ad must
+              // be watched fully — one ad watched, second skipped = no
+              // download, watch the ads again.
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _lang == 'ur'
+                      ? '📺 ویڈیو ڈاؤن لوڈ کرنے کے لیے ایڈ کو مکمل دیکھیں — اگر ایک ایڈ دیکھی اور دوسری نہ دیکھی تو ویڈیو ڈاؤن لوڈ نہیں ہوگی۔'
+                      : '📺 Watch the ad completely to download the video — if you watch one ad and not the second, the video will not download.',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
                     child: Text(
-                      '${result.segments.length} caption lines',
+                      '${_segments.length} caption lines',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
@@ -277,21 +484,46 @@ class _CaptionGeneratorScreenState extends State<CaptionGeneratorScreen> {
                     icon: const Icon(Icons.download, size: 18),
                     label: const Text('Save SRT'),
                   ),
+                  TextButton.icon(
+                    onPressed: _saveAss,
+                    icon: const Icon(Icons.style, size: 18),
+                    label: const Text('Save ASS'),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
-              for (final seg in result.segments)
+              for (var i = 0; i < _segments.length; i++)
                 Card(
                   child: ListTile(
                     leading: Chip(
                       label: Text(
-                        seg.timeLabel,
+                        _segments[i].timeLabel,
                         style: const TextStyle(fontSize: 11),
                       ),
                     ),
-                    title: Text(seg.text),
+                    title: Text(_segments[i].text),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, size: 20),
+                          tooltip: 'Edit',
+                          onPressed: () => _editSegment(i),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, size: 20),
+                          tooltip: 'Delete',
+                          onPressed: () => setState(
+                            () => _segments.removeAt(i),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+              const SizedBox(height: 16),
+              // For Help — very end of the screen.
+              HelpWhatsAppRow(lang: _lang),
             ],
           ],
         ),

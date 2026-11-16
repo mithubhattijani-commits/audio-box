@@ -7,6 +7,8 @@ import '../services/coins_service.dart';
 import '../services/remote_config_service.dart';
 import '../services/rss_service.dart';
 import '../services/updater_service.dart';
+import '../widgets/advertising_banner.dart';
+import '../widgets/help_whatsapp_button.dart';
 import '../widgets/news_ticker.dart';
 import 'article_listen_screen.dart';
 import 'article_webview_screen.dart';
@@ -340,6 +342,10 @@ class HomeScreen extends StatelessWidget {
                       );
                     },
                   ),
+                  const SizedBox(height: 16),
+                  // Advertising banner (v1.0.6): chairman's photo +
+                  // contact line for advertising in the app.
+                  AdvertisingBanner(lang: locale.languageCode),
                   const SizedBox(height: 20),
                   // Latest articles (RSS feed) — tap opens the full page
                   // on nigraantv.xyz with its banner ads. Free, no coins.
@@ -420,6 +426,9 @@ class HomeScreen extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey),
                   ),
+                  const SizedBox(height: 16),
+                  // For Help — very end of the home screen.
+                  HelpWhatsAppRow(lang: locale.languageCode),
                 ],
               ),
             ),

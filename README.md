@@ -258,8 +258,8 @@ Urdu subtitle). One Unity banner, zone `tools`.
 |---|---|
 | Text to Speech — متن کو آواز میں بدلیں | Existing TTS Studio screen |
 | Audio Converter — آڈیو کو WAV میں بدلیں | Existing MP3 Converter screen |
-| AI Caption Generator — ویڈیو کے خودکار کیپشنز | NEW `caption_generator_screen.dart` |
-| Video Caption Maker (AI) — ویڈیو فائل کی آواز سے خودکار کیپشن + کیپشن والی ویڈیو | NEW `video_caption_maker_screen.dart` |
+| AI Caption Generator — ویڈیو کے خودکار کیپشنز + 10 اسٹائل | `caption_generator_screen.dart` |
+| Video Caption Maker (AI) — خودکار کیپشن + 10 اسٹائل + SRT/ASS — ویڈیو پر پیش نظارہ | `video_caption_maker_screen.dart` |
 
 **AI Caption Generator** — pick an audio/video file (`file_picker`;
 mp3/wav/m4a/aac/ogg/flac/mp4/mov/mkv/webm/m4v), transcribe via
@@ -267,8 +267,38 @@ mp3/wav/m4a/aac/ogg/flac/mp4/mov/mkv/webm/m4v), transcribe via
 as SRT. **Video Caption Maker (AI)** — pick a video (`file_picker`,
 video types), same transcription, captions list + SRT download +
 in-player caption preview: the video plays (`video_player`) with the
-current caption line overlaid at the bottom, synced to playback
+current caption line overlaid, synced to playback
 position (play/pause + seek slider).
+
+**Caption styles (v1.0.6):** both tools share one style system
+(`lib/services/caption_styles.dart` + `lib/widgets/
+caption_style_picker.dart` + `lib/widgets/styled_caption_text.dart`) —
+11 CapCut-style looks: Nigraan Karaoke (the channel's own reel style:
+the spoken word turns green #3AEC70, exactly like the Nigraan TV
+reels), Bold Pop, Pop Up (the spoken word pops up big), Karaoke Fill,
+Highlight Box, Typewriter, One Word, Classic, News Ticker, Spotlight,
+Minimal. English + Urdu (Urdu renders RTL).
+Each style card shows a LIVE animated preview; controls for position
+(Top / Middle / Bottom), size (S / M / L) and highlight colour
+(green / yellow / white / cyan / red / blue). The in-player preview
+and the generator's preview card render the chosen style with the
+spoken word highlighted. Word-by-word styles use even-split timing
+(each word gets an equal share of its line — the /transcribe
+endpoint returns line-level segments only, no word timestamps).
+Caption lines can be edited (fix misheard words) or deleted.
+Exports: plain SRT + a styled ASS file (`CaptionService.buildAss`)
+that opens in CapCut and any ASS-capable editor with the chosen
+colours / size / position / font (karaoke styles use ASS `{\kf}`
+timing).
+
+**Caption fonts (v1.0.6):** bundled in `assets/fonts/`, picked in the
+same controls row (each font chip is labelled IN that font):
+Urdu — Jameel Noori Nastaleeq Kasheeda (the channel's house font,
+the same file the reel renderer uses; auto-selected when the
+language is Urdu) + the phone's system font; English — Bebas Neue,
+Anton, Montserrat Black, Poppins Bold + system font. The chosen font
+applies to the preview and to the ASS file's Fontname. Bundled fonts
+add ~14 MB to the APK (the Jameel font alone is ~13 MB).
 
 **Coins (both caption tools, identical):** 50 coins per minute of
 media — same rate as TTS generation (`tts.coins_per_minute`, remote
@@ -281,14 +311,26 @@ from the file itself (video_player for video, audioplayers/WAV header
 for audio, file-size estimate as a last resort); the cost preview
 shows before the user taps Transcribe.
 
-**Ads (both caption tools, identical):** the SRT file delivery goes
-through the EXISTING `AudioDownloadService` one-ad gate
-(`downloadBytesWithAd`, same private gate as `downloadWithAd` — no
-second ad flow): 1 rewarded video ad plays, then the `.srt` saves to
-the phone's Download folder; fail-soft when ads are off or no ad
-loads; if the user skips the ad, nothing is delivered. Copying
-captions is free (no ad). Viewing the captions and the in-player
-preview costs no ad.
+**Ads (both caption tools, identical):** the SRT/ASS file delivery goes
+through the `AudioDownloadService` TWO-ad gate
+(`downloadBytesWithTwoAds`, same private gate as `downloadWithAd`,
+run twice): 2 rewarded video ads play back-to-back and BOTH must be
+watched fully, then the `.srt`/`.ass` saves to the phone's Download
+folder; fail-soft only when ads are off or no ad loads; if the user
+skips EITHER ad, nothing is delivered and they must tap download
+again and watch both ads again from the start. A notice above the
+download buttons says so in the user's words: "ویڈیو ڈاؤن لوڈ کرنے
+کے لیے ایڈ کو مکمل دیکھیں — اگر ایک ایڈ دیکھی اور دوسری نہ دیکھی تو
+ویڈیو ڈاؤن لوڈ نہیں ہوگی۔" Copying captions is free (no ad). Viewing
+the captions and the in-player preview costs no ad.
+
+**Advertising banner + WhatsApp help (v1.0.6):** the home screen
+shows an advertising banner with the chairman's photo
+(`assets/images/owner.jpg`) and the line "ایڈورٹائزنگ کروانے کے لیے
+رابطہ کریں" + a WhatsApp button (Rai Ghulam Jilani Bhatti,
+03090808180 → https://wa.me/923090808180). A "For Help" row with
+the same WhatsApp button sits at the very END of the home screen and
+both caption screens, for users who need any guideline.
 
 **MP3 Converter delivery (v1.0.3 batch 2):** conversion itself is
 still free (Edge re-generation, no coins, no ad). Downloading a
@@ -302,10 +344,11 @@ shared by `downloadWithAd` and `downloadBytesWithAd`.
 **HONEST LIMIT — NO BURN-IN (follow-up):** neither caption tool
 burns captions INTO the video file. Burning captions into video needs
 server-side ffmpeg, which Cloudflare Workers cannot run. What ships
-in v1.0.3 is captions + SRT file + in-player preview only. A
-burned-in captioned video file needs a server with ffmpeg (a small
-transcode service or a VPS/worker with ffmpeg) — that is a separate
-infrastructure follow-up, not part of this build.
+in v1.0.3–v1.0.6 is captions + SRT file + styled ASS file + styled
+in-player preview only. A burned-in captioned video file needs a
+server with ffmpeg (a small transcode service or a VPS/worker with
+ffmpeg) — that is a separate infrastructure follow-up, not part of
+this build.
 
 ## POST /transcribe (TTS proxy Worker)
 

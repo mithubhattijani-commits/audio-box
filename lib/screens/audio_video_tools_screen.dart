@@ -83,7 +83,7 @@ class AudioVideoToolsScreen extends StatelessWidget {
               _ToolCard(
                 icon: Icons.chat_bubble_outline,
                 title: 'AI Caption Generator',
-                subtitle: 'ویڈیو کے خودکار کیپشنز',
+                subtitle: 'ویڈیو کے خودکار کیپشنز + 11 اسٹائل + فونٹس',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => CaptionGeneratorScreen(coins: coins),
@@ -94,7 +94,7 @@ class AudioVideoToolsScreen extends StatelessWidget {
                 icon: Icons.movie,
                 title: 'Video Caption Maker (AI)',
                 subtitle:
-                    'ویڈیو فائل کی آواز سے خودکار کیپشن + کیپشن والی ویڈیو',
+                    'خودکار کیپشن + 11 اسٹائل + فونٹس + SRT/ASS — ویڈیو پر پیش نظارہ',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => VideoCaptionMakerScreen(coins: coins),

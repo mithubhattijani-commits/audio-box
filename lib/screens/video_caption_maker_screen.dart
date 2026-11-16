@@ -10,25 +10,36 @@ import '../l10n/strings.dart';
 import '../services/ads_service.dart';
 import '../services/audio_download_service.dart';
 import '../services/caption_service.dart';
+import '../services/caption_styles.dart';
 import '../services/coins_service.dart';
+import '../widgets/caption_style_picker.dart';
+import '../widgets/help_whatsapp_button.dart';
+import '../widgets/styled_caption_text.dart';
 
-/// Video Caption Maker (AI) (v1.0.3 batch 2): pick a video file,
-/// transcribe its audio via the proxy's POST /transcribe, show the
-/// captions list + SRT download + an IN-PLAYER caption preview — the
-/// video plays with the current caption line overlaid at the bottom,
-/// synced to the playback position.
+/// Video Caption Maker (AI) (v1.0.3 batch 2, styles in v1.0.6): pick a
+/// video file, transcribe its audio via the proxy's POST /transcribe,
+/// then style the captions — 11 CapCut-style looks (Nigraan Karaoke,
+/// Bold Pop, Pop Up, Karaoke Fill, Highlight Box, Typewriter, One Word,
+/// Classic, News Ticker, Spotlight, Minimal), English + Urdu, with
+/// position / size / highlight-colour / font controls. The player preview
+/// plays the video with the styled caption overlaid, synced to
+/// playback. Caption lines can be edited (fix misheard words) or
+/// deleted. Exports: plain SRT + a styled ASS file (opens in CapCut
+/// and any ASS-capable editor, with the chosen look).
 ///
-/// COINS + SRT AD GATE: exactly the same as the AI Caption Generator —
-/// 50 coins per minute (rounded up, min 50) charged BEFORE transcribing
-/// (refunded in full if transcription fails), and the SRT save goes
-/// through AudioDownloadService.downloadBytesWithAd (1 rewarded ad,
-/// then the file saves; fail-soft; skip = no delivery).
+/// COINS + SRT/ASS AD GATE: exactly the same as the AI Caption
+/// Generator — 50 coins per minute (rounded up, min 50) charged
+/// BEFORE transcribing (refunded in full if transcription fails), and
+/// the SRT/ASS save goes through AudioDownloadService
+/// .downloadBytesWithAd (1 rewarded ad, then the file saves;
+/// fail-soft; skip = no delivery).
 ///
 /// HONEST LIMIT — NO BURN-IN: burning captions INTO the video file
 /// needs server-side ffmpeg, which Cloudflare Workers cannot run. This
-/// screen delivers captions + SRT + the in-player preview only. A
-/// burned-in captioned video file is a follow-up needing server
-/// infrastructure (see README "Known v1 limits / follow-ups").
+/// screen delivers styled captions + SRT + styled ASS + the in-player
+/// preview only. A burned-in captioned video file is a follow-up
+/// needing server infrastructure (see README "Known v1 limits /
+/// follow-ups").
 class VideoCaptionMakerScreen extends StatefulWidget {
   final CoinsService coins;
 
@@ -48,6 +59,15 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
   bool _busy = false;
   String? _message;
   TranscriptionResult? _result;
+
+  // v1.0.6 — caption styling (editable segment list + style choices).
+  List<CaptionSegment> _segments = [];
+  CaptionStyle _style = CaptionStyles.all.first;
+  CaptionPosition _position = CaptionPosition.bottom;
+  CaptionSize _size = CaptionSize.medium;
+  int _highlight = CaptionStyles.green;
+  // Default font follows the default language (Urdu = Jameel Noori).
+  CaptionFont _font = CaptionFonts.jameelKasheeda;
 
   Duration? get _duration =>
       _playerReady ? _controller?.value.duration : null;
@@ -84,6 +104,7 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
       setState(() {
         _message = 'Video is too large — max 25 MB.';
         _result = null;
+        _segments = [];
       });
       return;
     }
@@ -95,6 +116,7 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
       _controller = controller;
       _playerReady = false;
       _result = null;
+      _segments = [];
       _message = null;
     });
     try {
@@ -140,7 +162,10 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
         duration: _duration,
       );
       if (!mounted) return;
-      setState(() => _result = result);
+      setState(() {
+        _result = result;
+        _segments = List.of(result.segments);
+      });
     } on InsufficientCoinsException {
       if (!mounted) return;
       setState(
@@ -155,9 +180,10 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
   }
 
   Future<void> _copyCaptions() async {
-    final result = _result;
-    if (result == null) return;
-    await Clipboard.setData(ClipboardData(text: result.srt));
+    if (_segments.isEmpty) return;
+    await Clipboard.setData(
+      ClipboardData(text: CaptionService.buildSrt(_segments)),
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Captions copied.')),
@@ -165,25 +191,86 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
   }
 
   Future<void> _saveSrt() async {
-    final result = _result;
     final name = _fileName;
-    if (result == null || name == null) return;
+    if (_segments.isEmpty || name == null) return;
     final base = name.contains('.')
         ? name.substring(0, name.lastIndexOf('.'))
         : name;
-    await AudioDownloadService.downloadBytesWithAd(
+    await AudioDownloadService.downloadBytesWithTwoAds(
       context,
       fileName: '$base.srt',
-      bytes: utf8.encode(result.srt),
+      bytes: utf8.encode(CaptionService.buildSrt(_segments)),
     );
+  }
+
+  Future<void> _saveAss() async {
+    final name = _fileName;
+    if (_segments.isEmpty || name == null) return;
+    final base = name.contains('.')
+        ? name.substring(0, name.lastIndexOf('.'))
+        : name;
+    await AudioDownloadService.downloadBytesWithTwoAds(
+      context,
+      fileName: '$base.ass',
+      bytes: utf8.encode(
+        CaptionService.buildAss(
+          _segments,
+          _style,
+          position: _position,
+          size: _size,
+          highlightColor: _highlight,
+          fontFamily: _font.family,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editSegment(int index) async {
+    final seg = _segments[index];
+    final controller = TextEditingController(text: seg.text);
+    final edited = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          Localizations.localeOf(context).languageCode == 'ur'
+              ? 'کیپشن بدلیں'
+              : 'Edit caption',
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (edited == null || edited.isEmpty || !mounted) return;
+    setState(() {
+      _segments[index] = CaptionSegment(
+        start: seg.start,
+        end: seg.end,
+        text: edited,
+      );
+    });
   }
 
   /// The caption line whose time range contains [position], if any.
   CaptionSegment? _currentCaption(Duration position) {
-    final result = _result;
-    if (result == null) return null;
+    if (_segments.isEmpty) return null;
     final pos = position.inMilliseconds / 1000;
-    for (final seg in result.segments) {
+    for (final seg in _segments) {
       if (pos >= seg.start && pos < seg.end) return seg;
     }
     return null;
@@ -194,6 +281,12 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
     final s = d.inSeconds % 60;
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
+
+  Alignment _positionAlign() => switch (_position) {
+        CaptionPosition.top => Alignment.topCenter,
+        CaptionPosition.middle => Alignment.center,
+        CaptionPosition.bottom => Alignment.bottomCenter,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -228,17 +321,23 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
                     ButtonSegment(value: 'en', label: Text('EN')),
                   ],
                   selected: {_lang},
-                  onSelectionChanged: (s) => setState(() => _lang = s.first),
+                  onSelectionChanged: (s) => setState(() {
+                    _lang = s.first;
+                    // Font follows the language: Urdu = Jameel Noori,
+                    // English = system font.
+                    _font = CaptionFonts.forLang(_lang).first;
+                  }),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             const Text(
               'Pick a video. Its audio is transcribed into captions — '
-              '50 coins per minute. The preview below plays the video '
-              'with the current caption overlaid. Captions are NOT burned '
-              'into the video file (that needs server-side ffmpeg — see '
-              'the note below); you get the captions + an SRT file.',
+              '50 coins per minute. Then pick a caption style (11 styles, '
+              'English + Urdu, Jameel Noori + display fonts) and watch '
+              'the styled preview. Save as SRT or styled ASS. Captions '
+              'are NOT burned into the video file '
+              '(that needs server-side ffmpeg — see the note below).',
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
@@ -251,10 +350,10 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
               AspectRatio(
                 aspectRatio: controller.value.aspectRatio,
                 child: Stack(
-                  alignment: Alignment.bottomCenter,
                   children: [
                     VideoPlayer(controller),
-                    // In-player caption preview, synced to playback.
+                    // Styled in-player caption preview, synced to
+                    // playback, in the chosen style + position.
                     ValueListenableBuilder<VideoPlayerValue>(
                       valueListenable: controller,
                       builder: (context, value, _) {
@@ -262,25 +361,21 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
                         if (caption == null) {
                           return const SizedBox.shrink();
                         }
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.7),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              caption.text,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
+                        return Align(
+                          alignment: _positionAlign(),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
+                            child: StyledCaptionText(
+                              text: caption.text,
+                              start: caption.start,
+                              end: caption.end,
+                              positionSeconds:
+                                  value.position.inMilliseconds / 1000,
+                              style: _style,
+                              size: _size,
+                              highlightColor: _highlight,
+                              lang: _lang,
+                              fontFamily: _font.family,
                             ),
                           ),
                         );
@@ -365,11 +460,54 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
             ],
             if (result != null) ...[
               const SizedBox(height: 16),
+              CaptionStylePicker(
+                selected: _style,
+                lang: _lang,
+                onStyleSelected: (s) => setState(() {
+                  _style = s;
+                  _position = s.position;
+                  _highlight = s.highlightColor;
+                }),
+              ),
+              const SizedBox(height: 12),
+              CaptionStyleControls(
+                position: _position,
+                onPositionChanged: (p) => setState(() => _position = p),
+                size: _size,
+                onSizeChanged: (s) => setState(() => _size = s),
+                highlightColor: _highlight,
+                onHighlightChanged: (c) => setState(() => _highlight = c),
+                lang: _lang,
+                font: _font,
+                onFontChanged: (f) => setState(() => _font = f),
+              ),
+              const SizedBox(height: 16),
+              // Download notice, in the user's exact words: the ad must
+              // be watched fully — one ad watched, second skipped = no
+              // download, watch the ads again.
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _lang == 'ur'
+                      ? '📺 ویڈیو ڈاؤن لوڈ کرنے کے لیے ایڈ کو مکمل دیکھیں — اگر ایک ایڈ دیکھی اور دوسری نہ دیکھی تو ویڈیو ڈاؤن لوڈ نہیں ہوگی۔'
+                      : '📺 Watch the ad completely to download the video — if you watch one ad and not the second, the video will not download.',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
                     child: Text(
-                      '${result.segments.length} caption lines',
+                      '${_segments.length} caption lines',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
@@ -383,21 +521,46 @@ class _VideoCaptionMakerScreenState extends State<VideoCaptionMakerScreen> {
                     icon: const Icon(Icons.download, size: 18),
                     label: const Text('Save SRT'),
                   ),
+                  TextButton.icon(
+                    onPressed: _saveAss,
+                    icon: const Icon(Icons.style, size: 18),
+                    label: const Text('Save ASS'),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
-              for (final seg in result.segments)
+              for (var i = 0; i < _segments.length; i++)
                 Card(
                   child: ListTile(
                     leading: Chip(
                       label: Text(
-                        seg.timeLabel,
+                        _segments[i].timeLabel,
                         style: const TextStyle(fontSize: 11),
                       ),
                     ),
-                    title: Text(seg.text),
+                    title: Text(_segments[i].text),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, size: 20),
+                          tooltip: 'Edit',
+                          onPressed: () => _editSegment(i),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, size: 20),
+                          tooltip: 'Delete',
+                          onPressed: () => setState(
+                            () => _segments.removeAt(i),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+              const SizedBox(height: 16),
+              // For Help — very end of the screen.
+              HelpWhatsAppRow(lang: _lang),
             ],
           ],
         ),

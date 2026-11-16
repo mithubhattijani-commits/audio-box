@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 
 import 'coins_service.dart';
+import 'caption_styles.dart';
 import 'remote_config_service.dart';
 
 /// One timed caption line returned by POST /transcribe.
@@ -212,6 +213,167 @@ class CaptionService {
     }
     return buf.toString();
   }
+
+  /// Build a styled ASS (Advanced Substation Alpha) document from
+  /// segments + a caption style, so the captions open in CapCut / any
+  /// editor that reads ASS with the chosen look (colours, size,
+  /// position, bold/outline). Word-by-word styles use even-split word
+  /// timing (see caption_styles.dart HONEST LIMITS). The highlight-box
+  /// word background has no ASS equivalent and is skipped here — the
+  /// line still carries the style's colours.
+  /// - karaoke: one Dialogue per line, {\kf} per word (ASS karaoke
+  ///   fills the sung part with SecondaryColour = highlight).
+  /// - pop: one Dialogue per word (only that word on screen).
+  /// - typewriter: one Dialogue per word, showing words-so-far.
+  /// - flash: one plain Dialogue per line.
+  static String buildAss(
+    List<CaptionSegment> segments,
+    CaptionStyle style, {
+    CaptionPosition position = CaptionPosition.bottom,
+    CaptionSize size = CaptionSize.medium,
+    int? highlightColor,
+    String? fontFamily,
+  }) {
+    final hl = highlightColor ?? style.highlightColor;
+    final fontSize =
+        (style.fontSizePt * CaptionStyles.sizeScale(size)).round();
+    final alignment = switch (position) {
+      CaptionPosition.top => 8,
+      CaptionPosition.middle => 5,
+      CaptionPosition.bottom => 2,
+    };
+    final back = style.backgroundColor != 0
+        ? CaptionStyles.assColor(style.backgroundColor)
+        : '&H80000000';
+    final buf = StringBuffer();
+    buf.writeln('[Script Info]');
+    buf.writeln('Title: Audio Box Captions');
+    buf.writeln('ScriptType: v4.00+');
+    buf.writeln('WrapStyle: 0');
+    buf.writeln('ScaledBorderAndShadow: yes');
+    buf.writeln('PlayResX: 1280');
+    buf.writeln('PlayResY: 720');
+    buf.writeln();
+    buf.writeln('[V4+ Styles]');
+    buf.writeln(
+      'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, '
+      'OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, '
+      'ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, '
+      'Alignment, MarginL, MarginR, MarginV, Encoding',
+    );
+    buf.writeln(
+      'Style: AudioBox,${fontFamily ?? 'Arial'},$fontSize,'
+      '${CaptionStyles.assColor(style.textColor)},'
+      '${CaptionStyles.assColor(hl)},'
+      '&H00000000,$back,${style.bold ? -1 : 0},0,0,0,100,100,0,0,1,'
+      '${style.outline ? 2 : 1},0,$alignment,10,10,40,1',
+    );
+    buf.writeln();
+    buf.writeln('[Events]');
+    buf.writeln(
+      'Format: Layer, Start, End, Style, Name, MarginL, MarginR, '
+      'MarginV, Effect, Text',
+    );
+    for (final seg in segments) {
+      if (seg.text.trim().isEmpty) continue;
+      final words = CaptionStyles.wordsOf(seg.text);
+      if (words.isEmpty) continue;
+      String show(String w) =>
+          style.uppercase ? w.toUpperCase() : w;
+      switch (style.animation) {
+        case CaptionAnimation.karaoke:
+          final line = StringBuffer();
+          for (var i = 0; i < words.length; i++) {
+            final ws = CaptionStyles.wordStart(
+              start: seg.start,
+              end: seg.end,
+              text: seg.text,
+              index: i,
+            );
+            final we = CaptionStyles.wordEnd(
+              start: seg.start,
+              end: seg.end,
+              text: seg.text,
+              index: i,
+            );
+            final cs = ((we - ws) * 100).round().clamp(1, 6000);
+            line.write('{\\kf$cs}${_assEscape(show(words[i]))} ');
+          }
+          buf.writeln(
+            'Dialogue: 0,${_assTimestamp(seg.start)},'
+            '${_assTimestamp(seg.end)},AudioBox,,0,0,0,,'
+            '${line.toString().trimRight()}',
+          );
+        case CaptionAnimation.pop:
+          for (var i = 0; i < words.length; i++) {
+            final ws = CaptionStyles.wordStart(
+              start: seg.start,
+              end: seg.end,
+              text: seg.text,
+              index: i,
+            );
+            final we = CaptionStyles.wordEnd(
+              start: seg.start,
+              end: seg.end,
+              text: seg.text,
+              index: i,
+            );
+            buf.writeln(
+              'Dialogue: 0,${_assTimestamp(ws)},${_assTimestamp(we)},'
+              'AudioBox,,0,0,0,,${_assEscape(show(words[i]))}',
+            );
+          }
+        case CaptionAnimation.typewriter:
+          for (var i = 0; i < words.length; i++) {
+            final ws = CaptionStyles.wordStart(
+              start: seg.start,
+              end: seg.end,
+              text: seg.text,
+              index: i,
+            );
+            final we = i + 1 < words.length
+                ? CaptionStyles.wordStart(
+                    start: seg.start,
+                    end: seg.end,
+                    text: seg.text,
+                    index: i + 1,
+                  )
+                : seg.end;
+            final shown =
+                words.sublist(0, i + 1).map(show).join(' ');
+            buf.writeln(
+              'Dialogue: 0,${_assTimestamp(ws)},${_assTimestamp(we)},'
+              'AudioBox,,0,0,0,,${_assEscape(shown)}',
+            );
+          }
+        case CaptionAnimation.flash:
+          buf.writeln(
+            'Dialogue: 0,${_assTimestamp(seg.start)},'
+            '${_assTimestamp(seg.end)},AudioBox,,0,0,0,,'
+            '${_assEscape(show(seg.text))}',
+          );
+      }
+    }
+    return buf.toString();
+  }
+
+  /// ASS timestamp `H:MM:SS.cc` (centiseconds).
+  static String _assTimestamp(double seconds) {
+    final totalCs = (seconds * 100).round();
+    final h = totalCs ~/ 360000;
+    final m = (totalCs % 360000) ~/ 6000;
+    final s = (totalCs % 6000) ~/ 100;
+    final cs = totalCs % 100;
+    return '$h:${m.toString().padLeft(2, '0')}:'
+        '${s.toString().padLeft(2, '0')}.'
+        '${cs.toString().padLeft(2, '0')}';
+  }
+
+  /// Escape ASS special characters in caption text.
+  static String _assEscape(String text) => text
+      .replaceAll(r'\', r'\\')
+      .replaceAll('{', r'\{')
+      .replaceAll('}', r'\}');
 
   /// Best-effort media duration from the file itself, WITHOUT uploading
   /// anything. Video: video_player initialise. Audio: audioplayers
