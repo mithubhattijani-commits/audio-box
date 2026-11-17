@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/audio_item.dart';
 import '../models/tts_voice.dart';
+import 'audio_convert_service.dart';
 import 'tts_service.dart';
 
 /// On-device library of generated audios: files in the app documents dir
@@ -150,11 +151,20 @@ class AudioLibraryService {
     final out = <AudioItem>[];
     for (var i = 0; i < chunks.length; i++) {
       final gen = await tts.generateChunk(chunks[i], edgeVoice);
+      // v1.0.11: an Edge failure falls back to Gemini, which returns
+      // WAV. This flow saves MP3 items, so normalize a WAV part to
+      // MP3 first (rare path — Edge only fails on specific short texts).
+      final bytes = gen.ext == 'wav'
+          ? await AudioConvertService.transcodeBytesToMp3(
+              gen.bytes,
+              gen.ext,
+            )
+          : gen.bytes;
       final saved = await save(
         title: '${item.title} (MP3)',
         text: chunks[i],
         voice: edgeVoice,
-        bytes: gen.bytes,
+        bytes: bytes,
         ext: 'mp3',
         chunkIndex: i + 1,
         chunkCount: chunks.length,

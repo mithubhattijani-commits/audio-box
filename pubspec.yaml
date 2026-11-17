@@ -2,7 +2,7 @@ name: audio_box
 description: "Magic Box From Jaani — text-to-speech studio by Nigraan TV. Type text, get audio (Gemini + Edge voices), earn coins by watching Unity rewarded ads."
 publish_to: 'none'
 
-version: 1.0.10+11
+version: 1.0.11+12
 
 environment:
   sdk: ^3.13.7

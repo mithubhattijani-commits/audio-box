@@ -20,11 +20,18 @@ class GeneratedAudio {
   /// completed with an Edge voice instead.
   final bool fellBackToEdge;
 
+  /// True when an Edge voice was requested but Edge failed (non-200,
+  /// empty audio) and the generation was completed with the
+  /// same-gender Gemini voice instead (v1.0.11). The audio is then WAV,
+  /// not MP3 — callers must use [ext], never assume the format.
+  final bool fellBackToGemini;
+
   const GeneratedAudio({
     required this.bytes,
     required this.ext,
     this.model = '',
     this.fellBackToEdge = false,
+    this.fellBackToGemini = false,
   });
 }
 
@@ -106,6 +113,16 @@ class TtsService {
   static TtsVoice edgeFallbackFor(TtsVoice geminiVoice) =>
       geminiVoice.gender == 'Male' ? TtsVoice.byId('asad') : TtsVoice.byId('uzma');
 
+  /// Same-gender Gemini voice used when an Edge voice fails (v1.0.11):
+  /// Edge Asad (male) -> Gemini Charon, Edge Uzma (female) -> Aoede.
+  /// Edge fails deterministically on some short texts (the lone
+  /// greeting "Assalam-o-Alaikum" -> 502 / empty audio, Microsoft-side,
+  /// verified live 17 Nov 2026) while Gemini speaks the same text fine.
+  static TtsVoice geminiFallbackFor(TtsVoice edgeVoice) =>
+      edgeVoice.gender == 'Male'
+          ? TtsVoice.byId('charon')
+          : TtsVoice.byId('aoede');
+
   /// Split [text] into ~1-minute chunks for [voice].
   /// Splits on sentence boundaries first, then on words for long sentences.
   static List<String> chunkText(String text, TtsVoice voice) {
@@ -150,6 +167,14 @@ class TtsService {
   /// is retried with the same-gender Edge voice (Asad/Uzma), which is
   /// free. The caller shows a note when [GeneratedAudio.fellBackToEdge]
   /// is true. Throws only when BOTH engines fail.
+  ///
+  /// v1.0.11 — the reverse also holds: when an Edge voice is selected
+  /// (or Gemini is disabled remotely) and Edge fails or returns empty
+  /// audio, the SAME text is retried with the same-gender Gemini voice
+  /// (Asad -> Charon, Uzma -> Aoede), silently — [GeneratedAudio.ext]
+  /// is then 'wav', not 'mp3'. No extra coin charge either way: TTS
+  /// Studio charges per chunk regardless of engine, and re-generate /
+  /// MP3 conversion are free.
   Future<GeneratedAudio> generateChunkWithFallback(
     String text,
     TtsVoice voice, {
@@ -159,15 +184,19 @@ class TtsService {
     final useGemini =
         voice.engine == TtsEngine.gemini && cfg.geminiEnabled;
     if (!useGemini) {
-      // Edge voice selected, or Gemini disabled remotely: Edge directly.
+      // Edge voice selected, or Gemini disabled remotely: Edge first,
+      // Gemini same-gender voice when Edge fails (v1.0.11).
       final edgeVoice = voice.engine == TtsEngine.edge
           ? voice
           : edgeFallbackFor(voice);
-      final gen = await _generateEdge(text, edgeVoice);
+      final gen =
+          await _generateEdgeWithGeminiFallback(text, edgeVoice, lang);
       return GeneratedAudio(
         bytes: gen.bytes,
         ext: gen.ext,
+        model: gen.model,
         fellBackToEdge: voice.engine == TtsEngine.gemini,
+        fellBackToGemini: gen.fellBackToGemini,
       );
     }
     try {
@@ -185,7 +214,9 @@ class TtsService {
     }
   }
 
-  /// Generate audio for ONE chunk with a single engine (no fallback).
+  /// Generate audio for ONE chunk. Gemini voices use Gemini only;
+  /// Edge voices use Edge first with the silent same-gender Gemini
+  /// fallback (v1.0.11 — see [_generateEdgeWithGeminiFallback]).
   Future<GeneratedAudio> generateChunk(
     String text,
     TtsVoice voice, {
@@ -194,7 +225,7 @@ class TtsService {
     if (voice.engine == TtsEngine.gemini) {
       return _generateGemini(text, voice, lang);
     }
-    return _generateEdge(text, voice);
+    return _generateEdgeWithGeminiFallback(text, voice, lang);
   }
 
   Future<GeneratedAudio> _generateGemini(
@@ -251,7 +282,49 @@ class TtsService {
     if (res.statusCode != 200) {
       throw Exception('Edge TTS failed (${res.statusCode}): ${res.body}');
     }
+    // v1.0.11: a 200 with (near-)empty audio is a failure too — Edge
+    // returns an empty body for some short texts instead of an error.
+    // Anything under 1 KB cannot be real speech; treat it as empty so
+    // the Gemini fallback below can save the generation.
+    if (res.bodyBytes.length < 1024) {
+      throw Exception(
+        'Edge TTS returned empty audio (${res.bodyBytes.length} bytes)',
+      );
+    }
     return GeneratedAudio(bytes: res.bodyBytes, ext: 'mp3');
+  }
+
+  /// Edge generation with silent Gemini fallback (v1.0.11): when Edge
+  /// fails (non-200, empty/too-short audio, timeout) the SAME text is
+  /// retried with the same-gender Gemini voice (Asad -> Charon,
+  /// Uzma -> Aoede). Gemini returns WAV, Edge returns MP3 — the caller
+  /// must use [GeneratedAudio.ext], never assume MP3. Throws the
+  /// ORIGINAL Edge error when Gemini is disabled remotely or also
+  /// fails, so the user sees the real reason (e.g. the Edge daily
+  /// limit) instead of a confusing Gemini error.
+  Future<GeneratedAudio> _generateEdgeWithGeminiFallback(
+    String text,
+    TtsVoice edgeVoice,
+    String lang,
+  ) async {
+    try {
+      return await _generateEdge(text, edgeVoice);
+    } catch (edgeError) {
+      final cfg = RemoteConfigService.instance.config.tts;
+      if (!cfg.geminiEnabled) rethrow;
+      final geminiVoice = geminiFallbackFor(edgeVoice);
+      try {
+        final gen = await _generateGemini(text, geminiVoice, lang);
+        return GeneratedAudio(
+          bytes: gen.bytes,
+          ext: gen.ext,
+          model: gen.model,
+          fellBackToGemini: true,
+        );
+      } catch (_) {
+        throw edgeError;
+      }
+    }
   }
 
   /// Wrap 16-bit mono PCM sampled at 24 kHz in a WAV header.

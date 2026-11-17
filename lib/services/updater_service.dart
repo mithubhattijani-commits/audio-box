@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ffi';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -17,6 +18,11 @@ import '../config.dart';
 ///     notes (string) }
 ///   plus ONE additive field for force-update:
 ///   { minVersionCode (int, optional, default 0 = no force) }
+///   plus TWO additive fields for split APKs (v1.0.11, optional):
+///   { urls: {arm64-v8a, armeabi-v7a, x86_64} (per-ABI APK links),
+///     versionCodes: {arm64-v8a, armeabi-v7a, x86_64} (per-ABI codes:
+///     2000/1000/4000 + base) } — the device's ABI wins; anything
+///   missing falls back to the single url / versionCode.
 /// - Same check-on-launch behaviour: silent when up to date, silent when
 ///   the file is unreachable, "Later" dismisses that versionCode once.
 /// - Below minVersionCode -> FORCE update: blocking dialog, no Later,
@@ -39,6 +45,67 @@ class UpdaterService {
   /// True when the server reports a strictly newer build.
   static bool isNewerVersion(int latestCode, int currentCode) =>
       latestCode > currentCode;
+
+  /// This device's ABI as the manifest's "urls" map names it
+  /// (arm64-v8a / armeabi-v7a / x86_64), or null when it is none of
+  /// those. `dart:ffi` reports the ABI the app itself runs under —
+  /// exactly the split APK the device needs — with no new dependency.
+  static String? _currentAbiName() {
+    final abi = Abi.current();
+    if (abi == Abi.androidArm64) return 'arm64-v8a';
+    if (abi == Abi.androidArm) return 'armeabi-v7a';
+    if (abi == Abi.androidX64) return 'x86_64';
+    return null;
+  }
+
+  /// The versionCode that counts as "latest" for THIS device (v1.0.11).
+  /// Split APKs carry ABI-suffixed codes (Flutter's --split-per-abi
+  /// scheme: armeabi-v7a = 1000 + base, arm64-v8a = 2000 + base,
+  /// x86_64 = 4000 + base — so base 12 ships as 1012 / 2012 / 4012),
+  /// so the manifest may carry a per-ABI "versionCodes" map alongside
+  /// the single "versionCode". The device's own ABI wins; anything
+  /// unknown falls back to the single "versionCode", so old manifests
+  /// keep working. Without this, a phone on a split build (e.g. 2012)
+  /// would never be offered the next update (manifest "versionCode"
+  /// 13 is not > 2012).
+  static int? _latestVersionCode(Map<String, dynamic> manifest) {
+    final codes = manifest['versionCodes'];
+    if (codes is Map<String, dynamic>) {
+      final abiName = _currentAbiName();
+      if (abiName != null) {
+        final code = codes[abiName];
+        if (code is int) return code;
+        if (code is num) return code.toInt();
+      }
+    }
+    final fallback = manifest['versionCode'];
+    if (fallback is int) return fallback;
+    if (fallback is num) return fallback.toInt();
+    return null;
+  }
+
+  /// Pick the APK download URL for this device from the manifest.
+  /// v1.0.11: the manifest may carry a per-ABI "urls" map alongside
+  /// the legacy universal "url":
+  ///   { "url": "UNIVERSAL-APK-URL", "urls": {"arm64-v8a": "...",
+  ///     "armeabi-v7a": "...", "x86_64": "..."} }
+  /// The device's own ABI wins (split APK, ~120 MB instead of the
+  /// ~295 MB universal). Anything unknown — an old manifest without
+  /// "urls", an ABI not in the map — falls back to the universal
+  /// "url", so old manifests keep working unchanged.
+  static String? _pickDownloadUrl(Map<String, dynamic> manifest) {
+    final urls = manifest['urls'];
+    if (urls is Map<String, dynamic>) {
+      final abiName = _currentAbiName();
+      if (abiName != null) {
+        final abiUrl = urls[abiName];
+        if (abiUrl is String && abiUrl.isNotEmpty) return abiUrl;
+      }
+    }
+    final fallback = manifest['url'];
+    if (fallback is String && fallback.isNotEmpty) return fallback;
+    return null;
+  }
 
   static Future<Map<String, dynamic>?> _fetchManifest() async {
     try {
@@ -82,9 +149,9 @@ class UpdaterService {
       final currentCode = int.tryParse(info.buildNumber) ?? 0;
       final latest = await _fetchManifest();
       if (latest == null) return;
-      final latestCode = latest['versionCode'];
-      final apkUrl = latest['url'];
-      if (latestCode is! int || apkUrl is! String || apkUrl.isEmpty) return;
+      final latestCode = _latestVersionCode(latest);
+      final apkUrl = _pickDownloadUrl(latest);
+      if (latestCode == null || apkUrl == null) return;
       if (!isNewerVersion(latestCode, currentCode)) return;
 
       // Force update: installed build is below the minimum supported.
@@ -150,9 +217,9 @@ class UpdaterService {
         );
         return;
       }
-      final latestCode = latest['versionCode'];
-      final apkUrl = latest['url'];
-      if (latestCode is! int || apkUrl is! String || apkUrl.isEmpty) {
+      final latestCode = _latestVersionCode(latest);
+      final apkUrl = _pickDownloadUrl(latest);
+      if (latestCode == null || apkUrl == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Update info not found.')),
         );

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_session.dart';
@@ -212,6 +213,73 @@ class AudioConvertService {
       // Fall through to null — duration unknown.
     }
     return null;
+  }
+
+  /// Transcode in-memory audio bytes to MP3 bytes (v1.0.11).
+  ///
+  /// Used when an Edge TTS call silently fell back to Gemini: Gemini
+  /// returns WAV while Edge returns MP3, and the MP3-concat / MP3-save
+  /// flows need real MP3 bytes. Writes [bytes] to a temp file with its
+  /// real extension, re-encodes with ffmpeg (libmp3lame, 192 kbps) and
+  /// returns the MP3 bytes. Temp files are always cleaned up. Throws
+  /// when ffmpeg fails — the caller treats that like any other
+  /// generation failure.
+  static Future<Uint8List> transcodeBytesToMp3(
+    Uint8List bytes,
+    String ext,
+  ) async {
+    final dir = await convertedDir();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final input = File('${dir.path}/norm_tmp_$stamp.$ext');
+    final output = File('${dir.path}/norm_tmp_$stamp.mp3');
+    try {
+      await input.writeAsBytes(bytes);
+      final args = <String>[
+        '-y',
+        '-i',
+        input.path,
+        '-vn',
+        '-c:a',
+        'libmp3lame',
+        '-b:a',
+        '192k',
+        output.path,
+      ];
+      final completer = Completer<FFmpegSession>();
+      final session = await FFmpegKit.executeWithArgumentsAsync(
+        args,
+        (s) {
+          if (!completer.isCompleted) completer.complete(s);
+        },
+      );
+      final doneSession = await completer.future.timeout(
+        const Duration(minutes: 2),
+        onTimeout: () {
+          unawaited(FFmpegKit.cancel(session.getSessionId()));
+          throw TimeoutException('MP3 normalize timed out after 2 minutes.');
+        },
+      );
+      final returnCode = await doneSession.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode)) {
+        throw Exception(
+          'ffmpeg normalize failed (code ${returnCode?.getValue()})',
+        );
+      }
+      if (!await output.exists()) {
+        throw Exception('ffmpeg normalize produced no file.');
+      }
+      final outBytes = await output.readAsBytes();
+      if (outBytes.isEmpty) {
+        throw Exception('ffmpeg normalize produced an empty file.');
+      }
+      return outBytes;
+    } finally {
+      for (final f in [input, output]) {
+        try {
+          if (await f.exists()) await f.delete();
+        } catch (_) {}
+      }
+    }
   }
 
   /// ffmpeg audio filter chain for [options], or null when no filter

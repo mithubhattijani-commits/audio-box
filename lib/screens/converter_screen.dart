@@ -311,7 +311,16 @@ class _ConverterScreenState extends State<ConverterScreen> {
     final parts = <Uint8List>[];
     for (final chunk in chunks) {
       final gen = await tts.generateChunk(chunk, voice);
-      parts.add(gen.bytes);
+      // v1.0.11: an Edge failure falls back to Gemini, which returns
+      // WAV while Edge returns MP3. The concat below is MP3-only, so
+      // normalize any WAV part to MP3 first (rare path — Edge only
+      // fails on specific short texts).
+      parts.add(gen.ext == 'wav'
+          ? await AudioConvertService.transcodeBytesToMp3(
+              gen.bytes,
+              gen.ext,
+            )
+          : gen.bytes);
     }
     final mp3Bytes =
         parts.length == 1 ? parts.first : concatMp3(parts);
