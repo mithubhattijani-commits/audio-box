@@ -181,16 +181,73 @@ class UnityAdsService {
 
   /// Show the App Open ad on cold start.
   /// Call once after [init] completes. Never throws, never blocks
-  /// startup — 8s max wait, then gives up. Gated by the remote
-  /// app_open_ad.enabled flag (checked by the caller).
-  static Future<void> showAppOpenAd() async {
-    if (!_initialized) return;
+  /// startup — 4s max wait for the ad to be ready, then gives up.
+  /// Gated by the remote app_open_ad.enabled flag (checked by the caller).
+  ///
+  /// ONCE PER LAUNCH: the first call (from the splash flow or from
+  /// MainShell's existing call) wins; later calls return immediately,
+  /// so the ad can never show twice in one cold start.
+  ///
+  /// LOAD SEMANTICS (unity_ads_plugin ^0.5.0): the native `load` call
+  /// returns as soon as the load is STARTED — awaiting it does NOT mean
+  /// the ad is ready. Readiness arrives later via the onComplete /
+  /// onFailed callbacks, so this waits on [loadAppOpenAd]'s callback
+  /// Completer (the splash preloads it) instead of on the load Future.
+  static bool _appOpenAttempted = false;
+
+  /// True once the App Open ad has been attempted this launch (shown
+  /// or given up on). Guards the once-per-cold-start rule no matter
+  /// which caller triggers the show.
+  static bool get appOpenAttempted => _appOpenAttempted;
+
+  /// Completer for the in-flight (or finished) App Open load, shared
+  /// by the splash preload and the show. Completes true when the
+  /// placement is filled, false on failure. One load per launch.
+  static Completer<bool>? _appOpenLoadCompleter;
+  static bool _appOpenLoaded = false;
+
+  /// Load the App Open placement so it is ready to show. Safe to call
+  /// repeatedly: concurrent callers share the one in-flight load, and
+  /// a finished load answers immediately. Never throws. The returned
+  /// Future completes only when the load callback fires (or the call
+  /// itself fails) — callers add their own timeout.
+  static Future<bool> loadAppOpenAd() async {
+    if (!_initialized) return false;
+    if (_appOpenLoaded) return true;
+    final existing = _appOpenLoadCompleter;
+    if (existing != null) return existing.future;
+    final completer = Completer<bool>();
+    _appOpenLoadCompleter = completer;
     try {
       await UnityAds.load(
         placementId: appOpenPlacementId,
-        onComplete: (placementId) {},
-        onFailed: (placementId, error, message) {},
-      ).timeout(const Duration(seconds: 8), onTimeout: () {});
+        onComplete: (placementId) {
+          _appOpenLoaded = true;
+          if (!completer.isCompleted) completer.complete(true);
+        },
+        onFailed: (placementId, error, message) {
+          if (!completer.isCompleted) completer.complete(false);
+        },
+      );
+    } catch (_) {
+      if (!completer.isCompleted) completer.complete(false);
+    }
+    return completer.future;
+  }
+
+  static Future<void> showAppOpenAd() async {
+    if (_appOpenAttempted) return;
+    _appOpenAttempted = true;
+    if (!_initialized) return;
+    try {
+      // Wait for the splash preload; if nothing was preloaded, load
+      // now. 4s max — the ad must never delay app start: not ready in
+      // time means no ad this launch, home proceeds immediately.
+      final loaded = await loadAppOpenAd().timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => false,
+      );
+      if (!loaded) return;
       final completer = Completer<void>();
       UnityAds.showVideoAd(
         placementId: appOpenPlacementId,

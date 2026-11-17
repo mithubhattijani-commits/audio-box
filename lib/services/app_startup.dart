@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'ads_service.dart';
+import 'app_open_ad_service.dart';
 import 'google_auth_service.dart';
 import 'remote_config_service.dart';
 import 'supabase_service.dart';
@@ -64,6 +65,11 @@ class AppStartup {
     } catch (_) {
       // Ads stay inert until Unity is ready.
     }
+    // Preload the App Open ad while the splash is still showing, so it
+    // is usually already loaded when the splash finishes and can show
+    // immediately after it. Fire-and-forget: never blocks the splash,
+    // and a failed load just means no ad this launch (fail-soft).
+    AppOpenAdService.preload();
     report(0.80, 'Almost ready...');
 
     // Minimum splash time so the picture and the 1-100 count are

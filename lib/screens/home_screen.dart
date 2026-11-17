@@ -7,9 +7,9 @@ import '../services/coins_service.dart';
 import '../services/remote_config_service.dart';
 import '../services/rss_service.dart';
 import '../services/updater_service.dart';
-import '../widgets/advertising_banner.dart';
 import '../widgets/help_whatsapp_button.dart';
 import '../widgets/news_ticker.dart';
+import '../widgets/paid_banner_slot.dart';
 import 'article_listen_screen.dart';
 import 'article_webview_screen.dart';
 import 'audio_trimmer_screen.dart';
@@ -208,6 +208,17 @@ class HomeScreen extends StatelessWidget {
             // news scrolling on the blue ribbon) — no separate ribbon
             // below it.
             NewsTicker(onTapArticle: (a) => _openArticle(context, a)),
+            // Paid advertising slot — TOP (v1.0.10). Live paid banner
+            // when booked, else the owner's banner + an "Advertise
+            // here" prompt. Independent of the bottom slot.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: PaidBannerSlot(
+                slot: 'top',
+                coins: coins,
+                lang: locale.languageCode,
+              ),
+            ),
             // Sponsored ad card — TJ Earn rule: only when enabled AND
             // title AND action_url are both non-empty.
             ValueListenableBuilder<RemoteConfig>(
@@ -382,21 +393,15 @@ class HomeScreen extends StatelessWidget {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
-                  // Advertising banner (v1.0.6): chairman's photo +
-                  // contact line for advertising in the app. Remote
-                  // on/off from the website (v1.0.7):
-                  // advertising_banner.enabled, default on.
-                  ValueListenableBuilder<RemoteConfig>(
-                    valueListenable:
-                        RemoteConfigService.instance.notifier,
-                    builder: (context, cfg, _) {
-                      if (!cfg.advertisingBannerEnabled) {
-                        return const SizedBox.shrink();
-                      }
-                      return AdvertisingBanner(
-                        lang: locale.languageCode,
-                      );
-                    },
+                  // Paid advertising slot — BOTTOM (v1.0.10). Same
+                  // behaviour as the top slot; the owner's banner
+                  // inside it still respects the advertising_banner
+                  // remote-config switch, and paid banners show
+                  // regardless of that switch.
+                  PaidBannerSlot(
+                    slot: 'bottom',
+                    coins: coins,
+                    lang: locale.languageCode,
                   ),
                   const SizedBox(height: 20),
                   // Latest articles (RSS feed) — tap opens the full page

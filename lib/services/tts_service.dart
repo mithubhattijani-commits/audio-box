@@ -45,6 +45,50 @@ class TtsService {
   static const int geminiMaxChars = 1500;
   static const int edgeMaxChars = 550;
 
+  /// v1.0.10 — display limit for the character counter (the proxy's
+  /// documented per-call limit; chunking stays conservative at
+  /// [geminiMaxChars]/[edgeMaxChars] above, so long text auto-splits
+  /// into parts even before the counter hits this number).
+  static const int geminiDisplayMaxChars = 2000;
+  static const int edgeDisplayMaxChars = 600;
+
+  /// Rough speech rate used for the live cost estimate: ~800 chars
+  /// ≈ 1 minute of audio ≈ [CoinsService.coinsPerMinute] coins.
+  static const int charsPerMinute = 800;
+
+  /// Display limit for the character counter for [voice].
+  static int displayMaxChars(TtsVoice voice) =>
+      voice.engine == TtsEngine.gemini
+          ? geminiDisplayMaxChars
+          : edgeDisplayMaxChars;
+
+  /// Auto language detect: text containing Urdu/Arabic-script
+  /// characters is Urdu, anything else is English.
+  static String detectLanguage(String text) {
+    final urdu = RegExp(
+      r'[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]',
+    );
+    return urdu.hasMatch(text) ? 'ur' : 'en';
+  }
+
+  /// Estimated minutes of audio for [text] (chars / [charsPerMinute]).
+  static int estimatedMinutes(String text) {
+    if (text.trim().isEmpty) return 0;
+    return (text.length / charsPerMinute).ceil();
+  }
+
+  /// Live cost estimate while typing: chunks the text would split
+  /// into × [coinsPerMinute]. Uses the real [chunkText] so the
+  /// estimate matches what generation will actually charge.
+  static int estimatedCostCoins(
+    String text,
+    TtsVoice voice,
+    int coinsPerMinute,
+  ) {
+    if (text.trim().isEmpty) return 0;
+    return chunkText(text, voice).length * coinsPerMinute;
+  }
+
   /// Voices offered in TTS Studio, from the remote config (voice ids +
   /// engine on/off). Falls back to all four voices when the config is
   /// unreachable (bundled defaults).

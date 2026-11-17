@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 
+import '../services/caption_service.dart';
 import '../services/caption_styles.dart';
 
 /// Renders one caption line in a [CaptionStyle], with the spoken word
-/// highlighted at [positionSeconds] (even-split word timing — see
-/// caption_styles.dart HONEST LIMITS).
+/// highlighted at [positionSeconds] (real Whisper word timings when
+/// [words] is given, even-split timing otherwise — see
+/// CaptionService.activeWordIndexOf).
 ///
 /// Used by the Video Caption Maker live preview (real playback
 /// position), the AI Caption Generator preview card and the style
 /// picker cards (fake advancing position). Urdu text renders RTL;
 /// [fontFamily] picks the typeface (Jameel Noori Nastaleeq Kasheeda
 /// is bundled for Urdu, display fonts for English) — null falls back
-/// to the phone's system font.
+/// to the phone's system font. Emoji in the text render as-is.
+/// [outline]/[shadow]/[background] override the style's FX toggles
+/// when given (the FX row in the editor).
 class StyledCaptionText extends StatelessWidget {
   final String text;
 
@@ -30,6 +34,15 @@ class StyledCaptionText extends StatelessWidget {
   /// Flutter font family from [CaptionFont.family]; null = system font.
   final String? fontFamily;
 
+  /// Real Whisper word timings for this line (empty/absent =
+  /// even-split fallback). The word list must match [text].
+  final List<CaptionWord>? words;
+
+  /// FX overrides (null = use the style's own value).
+  final bool? outline;
+  final bool? shadow;
+  final bool? background;
+
   const StyledCaptionText({
     super.key,
     required this.text,
@@ -41,10 +54,40 @@ class StyledCaptionText extends StatelessWidget {
     required this.highlightColor,
     required this.lang,
     this.fontFamily,
+    this.words,
+    this.outline,
+    this.shadow,
+    this.background,
   });
 
   double get _fontSize =>
       style.fontSizePx * CaptionStyles.sizeScale(size);
+
+  bool get _useOutline => outline ?? style.outline;
+  bool get _useShadow => shadow ?? style.shadow;
+  bool get _useBackground =>
+      background ?? (style.backgroundColor != 0);
+
+  int _activeIndex() {
+    final w = words;
+    if (w != null && w.isNotEmpty) {
+      return CaptionService.activeWordIndexOf(
+        CaptionSegment(
+          start: start,
+          end: end,
+          text: text,
+          words: w,
+        ),
+        positionSeconds,
+      );
+    }
+    return CaptionStyles.activeWordIndex(
+      start: start,
+      end: end,
+      text: text,
+      positionSeconds: positionSeconds,
+    );
+  }
 
   TextStyle _wordStyle({required bool active}) {
     final base = TextStyle(
@@ -53,10 +96,10 @@ class StyledCaptionText extends StatelessWidget {
       fontWeight: style.bold ? FontWeight.w800 : FontWeight.w400,
       color: Color(active ? highlightColor : style.textColor),
     );
-    if (!style.outline) return base;
-    // Fake outline: dark stroke painted behind the fill via shadows.
-    return base.copyWith(
-      shadows: [
+    final shadows = <Shadow>[];
+    if (_useOutline) {
+      // Fake outline: dark stroke painted behind the fill via shadows.
+      shadows.addAll([
         for (final dx in [-1.0, 0.0, 1.0])
           for (final dy in [-1.0, 0.0, 1.0])
             if (dx != 0 || dy != 0)
@@ -65,8 +108,19 @@ class StyledCaptionText extends StatelessWidget {
                 offset: Offset(dx * 1.5, dy * 1.5),
                 blurRadius: 0,
               ),
-      ],
-    );
+      ]);
+    }
+    if (_useShadow) {
+      shadows.add(
+        const Shadow(
+          color: Colors.black54,
+          offset: Offset(2, 2),
+          blurRadius: 4,
+        ),
+      );
+    }
+    if (shadows.isEmpty) return base;
+    return base.copyWith(shadows: shadows);
   }
 
   Widget _wordSpan(String word, bool active) {
@@ -93,12 +147,7 @@ class StyledCaptionText extends StatelessWidget {
   Widget build(BuildContext context) {
     final words = CaptionStyles.wordsOf(text);
     if (words.isEmpty) return const SizedBox.shrink();
-    final active = CaptionStyles.activeWordIndex(
-      start: start,
-      end: end,
-      text: text,
-      positionSeconds: positionSeconds,
-    );
+    final active = _activeIndex();
 
     late final Widget content;
     switch (style.animation) {
@@ -151,10 +200,15 @@ class StyledCaptionText extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: content,
     );
-    final boxed = style.backgroundColor != 0
+    // Background ON (FX toggle) forces a dark box behind the line
+    // even when the style itself has no background colour.
+    final bgColor = style.backgroundColor != 0
+        ? Color(style.backgroundColor)
+        : Colors.black54;
+    final boxed = _useBackground
         ? Container(
             decoration: BoxDecoration(
-              color: Color(style.backgroundColor),
+              color: bgColor,
               borderRadius: BorderRadius.circular(8),
             ),
             child: inner,

@@ -10,6 +10,39 @@ import 'coins_service.dart';
 import 'caption_styles.dart';
 import 'remote_config_service.dart';
 
+/// One word with its real spoken timing, as returned by the
+/// /transcribe proxy (Whisper word timestamps). When a segment has
+/// no words, callers fall back to even-split timing.
+class CaptionWord {
+  final String word;
+  final double start;
+  final double end;
+
+  const CaptionWord({
+    required this.word,
+    required this.start,
+    required this.end,
+  });
+
+  factory CaptionWord.fromJson(Map<String, dynamic> j) {
+    return CaptionWord(
+      word: (j['word'] ?? j['text'] ?? j['w'] ?? '').toString().trim(),
+      start: (j['start'] as num?)?.toDouble() ??
+          (j['s'] as num?)?.toDouble() ??
+          0,
+      end: (j['end'] as num?)?.toDouble() ??
+          (j['e'] as num?)?.toDouble() ??
+          0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'word': word,
+        'start': start,
+        'end': end,
+      };
+}
+
 /// One timed caption line returned by POST /transcribe.
 class CaptionSegment {
   /// Start time in seconds (may be fractional).
@@ -20,19 +53,77 @@ class CaptionSegment {
 
   final String text;
 
+  /// Real Whisper word timings for this line (empty = unknown, use
+  /// even-split fallback). Emoji stay attached to their word — the
+  /// proxy returns them inside the word text, never stripped.
+  final List<CaptionWord> words;
+
+  /// Second-language line for dual captions (e.g. the English line
+  /// under an Urdu line). Empty = no second line. Set by the
+  /// translator screen or typed by hand in the line editor.
+  final String translation;
+
   const CaptionSegment({
     required this.start,
     required this.end,
     required this.text,
+    this.words = const [],
+    this.translation = '',
   });
 
   factory CaptionSegment.fromJson(Map<String, dynamic> j) {
+    final words = <CaptionWord>[];
+    final rawWords = j['words'] ?? j['word_timings'];
+    if (rawWords is List) {
+      for (final e in rawWords) {
+        if (e is Map<String, dynamic>) {
+          final w = CaptionWord.fromJson(e);
+          if (w.word.isNotEmpty) words.add(w);
+        } else if (e is Map) {
+          final w = CaptionWord.fromJson(
+            e.map((k, v) => MapEntry(k.toString(), v)),
+          );
+          if (w.word.isNotEmpty) words.add(w);
+        }
+      }
+    }
     return CaptionSegment(
       start: (j['start'] as num?)?.toDouble() ?? 0,
       end: (j['end'] as num?)?.toDouble() ?? 0,
       text: (j['text'] ?? '').toString().trim(),
+      words: words,
+      translation: (j['translation'] ??
+              j['translated_text'] ??
+              j['english'] ??
+              '')
+          .toString()
+          .trim(),
     );
   }
+
+  CaptionSegment copyWith({
+    double? start,
+    double? end,
+    String? text,
+    List<CaptionWord>? words,
+    String? translation,
+  }) {
+    return CaptionSegment(
+      start: start ?? this.start,
+      end: end ?? this.end,
+      text: text ?? this.text,
+      words: words ?? this.words,
+      translation: translation ?? this.translation,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'start': start,
+        'end': end,
+        'text': text,
+        'words': words.map((w) => w.toJson()).toList(),
+        'translation': translation,
+      };
 
   /// `MM:SS – MM:SS` label for the list UI.
   String get timeLabel =>
@@ -214,18 +305,137 @@ class CaptionService {
     return buf.toString();
   }
 
+  /// Build a WebVTT document from segments (YouTube / web players).
+  /// [dualLanguage] adds each line's [CaptionSegment.translation]
+  /// as a second line in the same cue when it is non-empty.
+  static String buildVtt(
+    List<CaptionSegment> segments, {
+    bool dualLanguage = false,
+  }) {
+    final buf = StringBuffer()..writeln('WEBVTT')..writeln();
+    for (final seg in segments) {
+      if (seg.text.trim().isEmpty) continue;
+      buf.writeln(
+        '${formatVttTimestamp(seg.start)} --> ${formatVttTimestamp(seg.end)}',
+      );
+      buf.writeln(seg.text);
+      if (dualLanguage && seg.translation.trim().isNotEmpty) {
+        buf.writeln(seg.translation);
+      }
+      buf.writeln();
+    }
+    return buf.toString();
+  }
+
+  /// `HH:MM:SS.mmm` WebVTT timestamp (dot, not comma, unlike SRT).
+  static String formatVttTimestamp(double seconds) =>
+      formatSrtTimestamp(seconds).replaceFirst(',', '.');
+
+  /// Plain-text export: one caption line per text line, no timings.
+  /// This is what the Copy button copies. [dualLanguage] adds each
+  /// line's translation directly under it when non-empty.
+  static String buildPlainText(
+    List<CaptionSegment> segments, {
+    bool dualLanguage = false,
+  }) {
+    final lines = <String>[];
+    for (final seg in segments) {
+      if (seg.text.trim().isEmpty) continue;
+      lines.add(seg.text);
+      if (dualLanguage && seg.translation.trim().isNotEmpty) {
+        lines.add(seg.translation);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  /// TXT export file contents — same as [buildPlainText].
+  static String buildTxt(
+    List<CaptionSegment> segments, {
+    bool dualLanguage = false,
+  }) =>
+      buildPlainText(segments, dualLanguage: dualLanguage);
+
+  // ---- real word timing (Whisper) with even-split fallback ----
+  //
+  // The proxy returns Whisper word timings on each segment
+  // ([CaptionSegment.words]). Karaoke / pop / typewriter use these
+  // first; a line with no word timings (manual line, old result)
+  // falls back to the even-split helpers in CaptionStyles.
+
+  /// Start of word [index] in [seg] — real timing when known.
+  static double wordStartOf(CaptionSegment seg, int index) {
+    if (index >= 0 && index < seg.words.length) {
+      return seg.words[index].start;
+    }
+    return CaptionStyles.wordStart(
+      start: seg.start,
+      end: seg.end,
+      text: seg.text,
+      index: index,
+    );
+  }
+
+  /// End of word [index] in [seg] — real timing when known.
+  static double wordEndOf(CaptionSegment seg, int index) {
+    if (index >= 0 && index < seg.words.length) {
+      return seg.words[index].end;
+    }
+    return CaptionStyles.wordEnd(
+      start: seg.start,
+      end: seg.end,
+      text: seg.text,
+      index: index,
+    );
+  }
+
+  /// Index of the word being spoken at [positionSeconds], or -1 when
+  /// outside the line. Real word timings when known, even-split
+  /// otherwise.
+  static int activeWordIndexOf(
+    CaptionSegment seg,
+    double positionSeconds,
+  ) {
+    if (seg.words.isNotEmpty) {
+      for (var i = 0; i < seg.words.length; i++) {
+        if (positionSeconds >= seg.words[i].start &&
+            positionSeconds < seg.words[i].end) {
+          return i;
+        }
+      }
+      if (positionSeconds < seg.start) return -1;
+      if (positionSeconds >= seg.end) return seg.words.length - 1;
+      return -1;
+    }
+    return CaptionStyles.activeWordIndex(
+      start: seg.start,
+      end: seg.end,
+      text: seg.text,
+      positionSeconds: positionSeconds,
+    );
+  }
+
   /// Build a styled ASS (Advanced Substation Alpha) document from
   /// segments + a caption style, so the captions open in CapCut / any
   /// editor that reads ASS with the chosen look (colours, size,
-  /// position, bold/outline). Word-by-word styles use even-split word
-  /// timing (see caption_styles.dart HONEST LIMITS). The highlight-box
-  /// word background has no ASS equivalent and is skipped here — the
-  /// line still carries the style's colours.
+  /// position, bold/outline). Word-by-word styles use the REAL
+  /// Whisper word timings when the segment carries them
+  /// ([wordStartOf]/[wordEndOf]) and even-split timing only as a
+  /// fallback. The highlight-box word background has no ASS
+  /// equivalent and is skipped here — the line still carries the
+  /// style's colours.
   /// - karaoke: one Dialogue per line, {\kf} per word (ASS karaoke
   ///   fills the sung part with SecondaryColour = highlight).
   /// - pop: one Dialogue per word (only that word on screen).
   /// - typewriter: one Dialogue per word, showing words-so-far.
   /// - flash: one plain Dialogue per line.
+  /// [playResX]/[playResY] set the ASS canvas: pass 1080x1920 for a
+  /// vertical (9:16) video and 1280x720 for a horizontal one — the
+  /// font size scales with the canvas height so the captions look
+  /// the same size relative to the frame. [outline]/[shadow]/
+  /// [background] override the style's FX toggles when given.
+  /// [dualLanguage] adds each line's translation as a second,
+  /// smaller Dialogue above the main line.
   static String buildAss(
     List<CaptionSegment> segments,
     CaptionStyle style, {
@@ -233,26 +443,52 @@ class CaptionService {
     CaptionSize size = CaptionSize.medium,
     int? highlightColor,
     String? fontFamily,
+    int playResX = 1280,
+    int playResY = 720,
+    bool? outline,
+    bool? shadow,
+    bool? background,
+    int? backgroundColor,
+    bool dualLanguage = false,
   }) {
     final hl = highlightColor ?? style.highlightColor;
+    // Font size scales with the canvas height (style sizes are tuned
+    // for a 720p canvas) so captions keep the same relative size on
+    // a 1080x1920 portrait canvas.
+    final resScale = playResY / 720;
     final fontSize =
-        (style.fontSizePt * CaptionStyles.sizeScale(size)).round();
+        (style.fontSizePt * CaptionStyles.sizeScale(size) * resScale)
+            .round();
+    final dualFontSize = (fontSize * 0.7).round();
+    final marginV = (40 * resScale).round();
+    final dualMarginV = marginV + fontSize;
     final alignment = switch (position) {
       CaptionPosition.top => 8,
       CaptionPosition.middle => 5,
       CaptionPosition.bottom => 2,
     };
-    final back = style.backgroundColor != 0
-        ? CaptionStyles.assColor(style.backgroundColor)
+    final useOutline = outline ?? style.outline;
+    final useShadow = shadow ?? style.shadow;
+    final useBackground = background ?? (style.backgroundColor != 0);
+    final back = useBackground
+        ? CaptionStyles.assColor(
+            backgroundColor ??
+                (style.backgroundColor != 0
+                    ? style.backgroundColor
+                    : CaptionStyles.black70),
+          )
         : '&H80000000';
+    // Background ON = opaque box behind the line (BorderStyle 3);
+    // otherwise the classic outline + shadow style (BorderStyle 1).
+    final borderStyle = useBackground ? 3 : 1;
     final buf = StringBuffer();
     buf.writeln('[Script Info]');
     buf.writeln('Title: Magic Box Captions');
     buf.writeln('ScriptType: v4.00+');
     buf.writeln('WrapStyle: 0');
     buf.writeln('ScaledBorderAndShadow: yes');
-    buf.writeln('PlayResX: 1280');
-    buf.writeln('PlayResY: 720');
+    buf.writeln('PlayResX: $playResX');
+    buf.writeln('PlayResY: $playResY');
     buf.writeln();
     buf.writeln('[V4+ Styles]');
     buf.writeln(
@@ -265,9 +501,20 @@ class CaptionService {
       'Style: AudioBox,${fontFamily ?? 'Arial'},$fontSize,'
       '${CaptionStyles.assColor(style.textColor)},'
       '${CaptionStyles.assColor(hl)},'
-      '&H00000000,$back,${style.bold ? -1 : 0},0,0,0,100,100,0,0,1,'
-      '${style.outline ? 2 : 1},0,$alignment,10,10,40,1',
+      '&H00000000,$back,${style.bold ? -1 : 0},0,0,0,100,100,0,0,'
+      '$borderStyle,${useOutline ? 2 : 1},${useShadow ? 1 : 0},'
+      '$alignment,10,10,$marginV,1',
     );
+    if (dualLanguage) {
+      buf.writeln(
+        'Style: AudioBoxDual,${fontFamily ?? 'Arial'},$dualFontSize,'
+        '${CaptionStyles.assColor(CaptionStyles.white)},'
+        '${CaptionStyles.assColor(CaptionStyles.white)},'
+        '&H00000000,$back,${style.bold ? -1 : 0},0,0,0,100,100,0,0,'
+        '$borderStyle,${useOutline ? 2 : 1},${useShadow ? 1 : 0},'
+        '$alignment,10,10,$dualMarginV,1',
+      );
+    }
     buf.writeln();
     buf.writeln('[Events]');
     buf.writeln(
@@ -284,18 +531,8 @@ class CaptionService {
         case CaptionAnimation.karaoke:
           final line = StringBuffer();
           for (var i = 0; i < words.length; i++) {
-            final ws = CaptionStyles.wordStart(
-              start: seg.start,
-              end: seg.end,
-              text: seg.text,
-              index: i,
-            );
-            final we = CaptionStyles.wordEnd(
-              start: seg.start,
-              end: seg.end,
-              text: seg.text,
-              index: i,
-            );
+            final ws = wordStartOf(seg, i);
+            final we = wordEndOf(seg, i);
             final cs = ((we - ws) * 100).round().clamp(1, 6000);
             line.write('{\\kf$cs}${_assEscape(show(words[i]))} ');
           }
@@ -306,18 +543,8 @@ class CaptionService {
           );
         case CaptionAnimation.pop:
           for (var i = 0; i < words.length; i++) {
-            final ws = CaptionStyles.wordStart(
-              start: seg.start,
-              end: seg.end,
-              text: seg.text,
-              index: i,
-            );
-            final we = CaptionStyles.wordEnd(
-              start: seg.start,
-              end: seg.end,
-              text: seg.text,
-              index: i,
-            );
+            final ws = wordStartOf(seg, i);
+            final we = wordEndOf(seg, i);
             buf.writeln(
               'Dialogue: 0,${_assTimestamp(ws)},${_assTimestamp(we)},'
               'AudioBox,,0,0,0,,${_assEscape(show(words[i]))}',
@@ -325,19 +552,9 @@ class CaptionService {
           }
         case CaptionAnimation.typewriter:
           for (var i = 0; i < words.length; i++) {
-            final ws = CaptionStyles.wordStart(
-              start: seg.start,
-              end: seg.end,
-              text: seg.text,
-              index: i,
-            );
+            final ws = wordStartOf(seg, i);
             final we = i + 1 < words.length
-                ? CaptionStyles.wordStart(
-                    start: seg.start,
-                    end: seg.end,
-                    text: seg.text,
-                    index: i + 1,
-                  )
+                ? wordStartOf(seg, i + 1)
                 : seg.end;
             final shown =
                 words.sublist(0, i + 1).map(show).join(' ');
@@ -352,6 +569,13 @@ class CaptionService {
             '${_assTimestamp(seg.end)},AudioBox,,0,0,0,,'
             '${_assEscape(show(seg.text))}',
           );
+      }
+      if (dualLanguage && seg.translation.trim().isNotEmpty) {
+        buf.writeln(
+          'Dialogue: 0,${_assTimestamp(seg.start)},'
+          '${_assTimestamp(seg.end)},AudioBoxDual,,0,0,0,,'
+          '${_assEscape(seg.translation)}',
+        );
       }
     }
     return buf.toString();

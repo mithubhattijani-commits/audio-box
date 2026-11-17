@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_shell.dart';
 import 'screens/splash_screen.dart';
+import 'services/app_open_ad_service.dart';
 import 'services/audio_library_service.dart';
 import 'services/coins_service.dart';
 import 'services/google_auth_service.dart';
@@ -120,15 +121,43 @@ class _AuthGate extends StatefulWidget {
 class _AuthGateState extends State<_AuthGate> {
   late bool _signedIn;
 
+  /// False until the cold-start App Open ad has been shown (or skipped).
+  /// MainShell mounts only after this, so the ad runs after the splash
+  /// and before home — never before the login screen, and never on
+  /// resume (this state is created once per launch).
+  bool _appOpenDone = false;
+
   @override
   void initState() {
     super.initState();
     _signedIn = GoogleAuthService.isSignedIn;
+    if (_signedIn) {
+      _runAppOpenAd();
+    }
+    // Not signed in: no ad before login. The ad runs after a
+    // successful login instead (see onSignedIn below) — same cold
+    // start, same once-per-launch flag.
+  }
+
+  /// Show the App Open ad once (fail-soft, 4s max wait for readiness),
+  /// then let home mount. Never throws.
+  Future<void> _runAppOpenAd() async {
+    await AppOpenAdService.showIfColdStart();
+    if (mounted) setState(() => _appOpenDone = true);
   }
 
   @override
   Widget build(BuildContext context) {
     if (_signedIn) {
+      if (!_appOpenDone) {
+        // The fullscreen ad covers this; a plain dark screen behind it
+        // (matches the splash's bottom edge). When no ad is available
+        // this flashes only briefly before home mounts.
+        return const Scaffold(
+          backgroundColor: Color(0xFF1C1B29),
+          body: SizedBox.shrink(),
+        );
+      }
       return MainShell(
         coins: widget.coins,
         library: widget.library,
@@ -137,7 +166,13 @@ class _AuthGateState extends State<_AuthGate> {
       );
     }
     return LoginScreen(
-      onSignedIn: () => setState(() => _signedIn = true),
+      onSignedIn: () {
+        setState(() {
+          _signedIn = true;
+          _appOpenDone = false;
+        });
+        _runAppOpenAd();
+      },
     );
   }
 }

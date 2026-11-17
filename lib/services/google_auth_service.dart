@@ -10,7 +10,7 @@ import 'supabase_service.dart';
 ///
 /// WHY: v1.0.2 used anonymous Supabase sign-in. Coins are keyed to the
 /// anonymous `user.id`, which lives only in the on-device session — an
-/// uninstall / clear-data created a new anonymous user and a fresh 100
+/// uninstall / clear-data created a new anonymous user and a fresh 50
 /// daily coins. A Google-linked account survives reinstalls, so the
 /// same `user.id` (and coins) come back.
 ///

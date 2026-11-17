@@ -7,7 +7,7 @@ import 'remote_config_service.dart';
 import 'supabase_service.dart';
 
 /// Coin economy (user's numbers, 15 Nov 2026):
-/// - Daily free: 100 coins (claim once per calendar day).
+/// - Daily free: 50 coins (claim once per calendar day).
 /// - One audio generation (~1 minute chunk): coinsPerMinute from the
 ///   remote config (default 50).
 /// - Rewarded options from the remote config (default: 2 ads = 50 coins,
@@ -22,7 +22,7 @@ import 'supabase_service.dart';
 /// Until then the app is honest about it (see Coins screen note).
 class CoinsService {
   /// Bundled defaults (used when the remote config is unreachable).
-  static const int defaultDailyFreeCoins = 100;
+  static const int defaultDailyFreeCoins = 50;
   static const int defaultCoinsPerMinute = 50;
   static const int defaultDailyCap = 10;
 
@@ -108,7 +108,7 @@ class CoinsService {
     return claimed != today;
   }
 
-  /// Claim the daily 100 free coins. Returns false if already claimed.
+  /// Claim the daily 50 free coins. Returns false if already claimed.
   Future<bool> claimDaily() async {
     if (!canClaimDaily) return false;
     await _prefs?.setString(_dailyClaimKey, _todayKey());

@@ -1,4 +1,5 @@
-/// Caption styles for the Audio Box caption tools (v1.0.6).
+/// Caption styles for the Audio Box caption tools (v1.0.6, presets +
+/// FX in v1.0.10).
 ///
 /// CapCut-style professional captions: 10 styles, English + Urdu,
 /// word-by-word karaoke, pop, typewriter — the same looks creators
@@ -9,16 +10,15 @@
 /// unit-checked with plain `dart`. Widgets convert the ARGB ints to
 /// [Color] at the render layer.
 ///
-/// HONEST LIMITS (keep these true in the UI copy):
-/// - The /transcribe endpoint returns LINE-level segments
-///   (start/end/text) — no word timestamps. Word-by-word styles use
-///   EVEN-SPLIT timing: each word gets an equal share of its line's
-///   duration. For short SRT lines (2–4 s) this lands close to the
-///   spoken word; it is an approximation, not measured word timing.
-/// - No burn-in: captions are NOT written into the video file (that
-///   needs server-side ffmpeg). The tools deliver a styled live
-///   preview + SRT + a styled ASS file (usable in CapCut and any
-///   editor that reads ASS).
+/// WORD TIMING (v1.0.10): the /transcribe proxy now returns real
+/// Whisper word timings (see CaptionSegment.words) — karaoke / pop /
+/// typewriter use those when present and fall back to even-split
+/// timing only when a line has no word timings (e.g. a manually
+/// typed line).
+///
+/// BURN-IN (v1.0.10): captions CAN be burned into the video file
+/// on-device with ffmpeg (VideoExportService) — the old "no burn-in"
+/// limit no longer applies.
 library;
 
 /// How the words of one line are shown over time.
@@ -63,6 +63,9 @@ class CaptionStyle {
   /// Black outline around the letters (Bold Pop / Classic).
   final bool outline;
 
+  /// Soft drop shadow behind the letters (FX toggle).
+  final bool shadow;
+
   final bool bold;
 
   /// Upper-case the words (Bold Pop / One Word English look).
@@ -90,6 +93,7 @@ class CaptionStyle {
     this.highlightBg = 0,
     this.backgroundColor = 0,
     this.outline = false,
+    this.shadow = false,
     this.bold = true,
     this.uppercase = false,
     required this.fontSizePx,
@@ -263,7 +267,12 @@ class CaptionStyles {
   static CaptionStyle byId(String id) =>
       all.firstWhere((s) => s.id == id, orElse: () => all.first);
 
-  // ---- word timing (even-split — see the HONEST LIMITS note) ----
+  // ---- word timing (even-split fallback) ----
+  //
+  // Used ONLY when a line carries no real Whisper word timings
+  // (CaptionSegment.words empty — e.g. a manually typed line). Real
+  // timings live on the segment; see CaptionService.wordStart /
+  // wordEnd / activeWordIndex, which prefer them.
 
   static List<String> wordsOf(String text) => text
       .split(RegExp(r'\s+'))
@@ -423,4 +432,92 @@ class CaptionFonts {
   static List<CaptionFont> forLang(String lang) => lang == 'ur'
       ? const [jameelKasheeda, system]
       : const [system, bebas, anton, montserrat, poppins];
+}
+
+/// One-tap caption preset (v1.0.10): a style + position + size +
+/// font + highlight + FX bundle, so the user picks a whole look
+/// instead of tuning each control. The font is applied only when it
+/// is offered for the current language (see
+/// [CaptionFonts.forLang]); otherwise the current font is kept.
+class CaptionPreset {
+  const CaptionPreset({
+    required this.id,
+    required this.nameEn,
+    required this.nameUr,
+    required this.styleId,
+    required this.position,
+    required this.size,
+    required this.fontId,
+    required this.highlightColor,
+    this.outline = true,
+    this.shadow = false,
+    this.background = false,
+  });
+
+  final String id;
+  final String nameEn;
+  final String nameUr;
+  final String styleId;
+  final CaptionPosition position;
+  final CaptionSize size;
+  final String fontId;
+  final int highlightColor;
+  final bool outline;
+  final bool shadow;
+  final bool background;
+}
+
+class CaptionPresets {
+  /// Nigraan News: the channel's own reel look — Nigraan Karaoke,
+  /// green spoken word, Jameel Noori, bottom.
+  static const CaptionPreset nigraanNews = CaptionPreset(
+    id: 'nigraan_news',
+    nameEn: 'Nigraan News',
+    nameUr: 'نگران نیوز',
+    styleId: 'nigraan',
+    position: CaptionPosition.bottom,
+    size: CaptionSize.medium,
+    fontId: 'jameel_kasheeda',
+    highlightColor: CaptionStyles.green,
+    outline: true,
+    shadow: true,
+  );
+
+  /// TikTok Bold: big popping words, middle of frame, display font.
+  static const CaptionPreset tiktokBold = CaptionPreset(
+    id: 'tiktok_bold',
+    nameEn: 'TikTok Bold',
+    nameUr: 'ٹک ٹاک بولڈ',
+    styleId: 'bold_pop',
+    position: CaptionPosition.middle,
+    size: CaptionSize.large,
+    fontId: 'bebas',
+    highlightColor: CaptionStyles.yellow,
+    outline: true,
+    shadow: true,
+  );
+
+  /// Clean: small plain white captions, no outline, no effects.
+  static const CaptionPreset clean = CaptionPreset(
+    id: 'clean',
+    nameEn: 'Clean',
+    nameUr: 'سادہ',
+    styleId: 'classic',
+    position: CaptionPosition.bottom,
+    size: CaptionSize.small,
+    fontId: 'system',
+    highlightColor: CaptionStyles.white,
+    outline: false,
+    shadow: false,
+    background: false,
+  );
+
+  static const List<CaptionPreset> all = [
+    nigraanNews,
+    tiktokBold,
+    clean,
+  ];
+
+  static CaptionPreset byId(String id) =>
+      all.firstWhere((p) => p.id == id, orElse: () => nigraanNews);
 }

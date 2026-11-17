@@ -51,7 +51,7 @@ class AppStrings {
       'en': 'Not enough coins — watch ads or claim your daily coins.',
       'ur': 'کوائنز کم ہیں — اشتہار دیکھیں یا روزانہ کوائنز لیں۔',
     },
-    'daily_coins': {'en': 'Claim daily 100 free coins', 'ur': 'روزانہ 100 مفت کوائنز لیں'},
+    'daily_coins': {'en': 'Claim daily 50 free coins', 'ur': 'روزانہ 50 مفت کوائنز لیں'},
     'daily_claimed': {
       'en': 'Daily coins already claimed — come back tomorrow.',
       'ur': 'آج کے کوائنز مل چکے ہیں — کل پھر آئیں۔',

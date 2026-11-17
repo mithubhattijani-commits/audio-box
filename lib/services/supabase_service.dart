@@ -222,7 +222,7 @@ class SupabaseService {
     return null;
   }
 
-  /// Claim the daily 100 free coins (server-side, once per day).
+  /// Claim the daily 50 free coins (server-side, once per day).
   /// Returns the granted amount, or null when not available.
   static Future<int?> claimDailyCoins() async {
     if (!isReady) return null;

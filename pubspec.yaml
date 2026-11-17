@@ -2,7 +2,7 @@ name: audio_box
 description: "Magic Box From Jaani — text-to-speech studio by Nigraan TV. Type text, get audio (Gemini + Edge voices), earn coins by watching Unity rewarded ads."
 publish_to: 'none'
 
-version: 1.0.9+10
+version: 1.0.10+11
 
 environment:
   sdk: ^3.13.7
@@ -55,6 +55,11 @@ dependencies:
   google_mlkit_translation: ^1.0.3
   # Full article pages in-app (real page, website banner ads included).
   webview_flutter: ^4.8.0
+  # On-device ffmpeg (v1.0.10): video caption burn-in + real audio
+  # format conversion. ffmpeg_kit_flutter_new 4.6.8 is the maintained
+  # fork (the original ffmpeg_kit_flutter is abandoned). minSdk 24,
+  # which Flutter 3.47.8 already sets via flutter.minSdkVersion.
+  ffmpeg_kit_flutter_new: ^4.6.8
 
 dev_dependencies:
   flutter_test:

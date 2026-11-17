@@ -26,6 +26,15 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- TTS Studio (v1.0.10): shared text opens the app so it can
+                 be voiced. The text is read in Dart via the
+                 nigraan.tts/share MethodChannel (MainActivity.kt +
+                 shared_text_service.dart). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

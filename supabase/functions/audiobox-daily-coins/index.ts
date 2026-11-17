@@ -1,16 +1,16 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
-/// Claim the daily 100 free coins (Audio Box).
+/// Claim the daily 50 free coins (Audio Box).
 ///
-/// Server-side (service role): credits 100 coins once per calendar day.
+/// Server-side (service role): credits 50 coins once per calendar day.
 /// Idempotent via idempotency_key — a second call the same day returns
 /// { ok: true, already_claimed: true } instead of crediting again.
 ///
 /// Deploy (follow-up step — not deployed yet):
 ///   supabase functions deploy audiobox-daily-coins --project-ref znyaxxkhhopdqrvxhxmb
 /// Requires: SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in the project.
-/// App_config keys (optional): audiobox_daily_coins (default 100).
+/// App_config keys (optional): audiobox_daily_coins (default 50).
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
     .in('key', ['audiobox_daily_coins']);
   const cfg: Record<string, string> = {};
   for (const r of cfgRows ?? []) cfg[r.key] = r.value;
-  const dailyCoins = parseInt(cfg['audiobox_daily_coins'] ?? '100', 10);
+  const dailyCoins = parseInt(cfg['audiobox_daily_coins'] ?? '50', 10);
 
   const today = new Date().toISOString().split('T')[0];
   const idemKey = `audiobox_daily:${user.id}:${today}`;

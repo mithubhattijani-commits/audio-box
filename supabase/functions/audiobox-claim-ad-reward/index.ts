@@ -15,7 +15,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 /// - JWT auth (401 if invalid)
 /// - Reward amount from app_config audiobox_reward_coins (default 50)
 ///   — the amount NEVER comes from the client
-/// - Daily cap from app_config audiobox_reward_daily_cap (default 20)
+/// - Daily cap from app_config audiobox_reward_daily_cap (default 50)
 /// - Minimum 30 seconds between claims (429 if too soon)
 /// - Idempotent ledger entries via idempotency_key (409 on replay)
 ///
@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
   for (const r of cfgRows ?? []) cfg[r.key] = r.value;
 
   const rewardCoins = parseInt(cfg['audiobox_reward_coins'] ?? '50', 10);
-  const dailyCap = parseInt(cfg['audiobox_reward_daily_cap'] ?? '20', 10);
+  const dailyCap = parseInt(cfg['audiobox_reward_daily_cap'] ?? '50', 10);
 
   if (rewardCoins <= 0) {
     return json({ error: 'disabled' }, 200);
