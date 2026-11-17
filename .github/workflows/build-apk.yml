@@ -39,14 +39,20 @@ jobs:
         run: flutter analyze
 
       # Release signing: the keystore is stored ENCRYPTED in the repo
-      # (android/app/release.keystore.enc) and decrypted here with the
-      # KEYSTORE_PASSPHRASE repo secret. Every release build is signed
-      # with the SAME permanent key, so installed apps update without
-      # uninstalling.
+      # (android/app/audiobox-release.keystore.enc) and decrypted here
+      # with the KEYSTORE_PASSPHRASE repo secret. The same passphrase
+      # is the keystore password AND the key password, and the key
+      # alias is "audiobox". Every release build is signed with the
+      # SAME permanent key, so the installed app updates in place
+      # without uninstalling.
       - name: Decrypt release keystore
         run: openssl enc -d -aes-256-cbc -salt -pbkdf2 -in android/app/audiobox-release.keystore.enc -out android/app/release.keystore -pass pass:"${{ secrets.KEYSTORE_PASSPHRASE }}"
 
-      - name: Build release APK
+      # v1.0.11: TWO builds from the same tree. The universal APK
+      # (~295 MB, all ABIs) is the fallback the updater serves when no
+      # per-ABI URL matches; the split APKs (~120 MB each) are what the
+      # updater serves per device ABI.
+      - name: Build release APK (universal)
         env:
           KEYSTORE_FILE: ${{ github.workspace }}/android/app/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSPHRASE }}
@@ -57,21 +63,52 @@ jobs:
             --dart-define=SUPABASE_URL=https://znyaxxkhhopdqrvxhxmb.supabase.co \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
 
-      - name: Verify APK
+      - name: Build release APKs (split per ABI)
+        env:
+          KEYSTORE_FILE: ${{ github.workspace }}/android/app/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSPHRASE }}
+          KEY_ALIAS: audiobox
+          KEY_PASSWORD: ${{ secrets.KEYSTORE_PASSPHRASE }}
         run: |
-          ls -la build/app/outputs/flutter-apk/app-release.apk
-          APK=build/app/outputs/flutter-apk/app-release.apk
+          flutter build apk --release --split-per-abi \
+            --dart-define=SUPABASE_URL=https://znyaxxkhhopdqrvxhxmb.supabase.co \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Verify APKs
+        run: |
           AAPT2=$(ls "$ANDROID_SDK_ROOT"/build-tools/*/aapt2 | head -1)
-          "$AAPT2" dump badging "$APK" | grep -F "package: name='com.nigraantv.audiobox'"
+          APKSIGNER=$(ls "$ANDROID_SDK_ROOT"/build-tools/*/apksigner | head -1)
           EXPECTED_VC=$(grep -E '^version:' pubspec.yaml | sed 's/.*+//')
           EXPECTED_VN=$(grep -E '^version:' pubspec.yaml | sed 's/^version: //; s/+.*//')
-          "$AAPT2" dump badging "$APK" | grep -F "versionCode='$EXPECTED_VC'"
-          "$AAPT2" dump badging "$APK" | grep -F "versionName='$EXPECTED_VN'"
-          APKSIGNER=$(ls "$ANDROID_SDK_ROOT"/build-tools/*/apksigner | head -1)
-          "$APKSIGNER" verify --verbose "$APK"
+          CERT_SHA256="f0f9b8a7f4c08419604c3e0b1093424ab57977d1470dcc4c21c3be591fb34e2d"
+          # Split APKs carry ABI-suffixed versionCodes (Flutter's
+          # --split-per-abi scheme: armeabi-v7a = 1000 + base,
+          # arm64-v8a = 2000 + base, x86_64 = 4000 + base).
+          check_apk() {
+            local APK="$1" EXPECTED_CODE="$2"
+            ls -la "$APK"
+            "$AAPT2" dump badging "$APK" | grep -F "package: name='com.nigraantv.audiobox'"
+            "$AAPT2" dump badging "$APK" | grep -F "versionCode='$EXPECTED_CODE'"
+            "$AAPT2" dump badging "$APK" | grep -F "versionName='$EXPECTED_VN'"
+            "$APKSIGNER" verify --verbose "$APK"
+            "$APKSIGNER" verify --print-certs "$APK" | grep -F "Signer #1 certificate SHA-256 digest: $CERT_SHA256"
+          }
+          check_apk build/app/outputs/flutter-apk/app-release.apk "$EXPECTED_VC"
+          check_apk build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "$((1000 + EXPECTED_VC))"
+          check_apk build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "$((2000 + EXPECTED_VC))"
+          check_apk build/app/outputs/flutter-apk/app-x86_64-release.apk "$((4000 + EXPECTED_VC))"
 
-      - name: Upload APK artifact
+      - name: Upload universal APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: audio-box-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload split APKs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio-box-split-apks
+          path: |
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-x86_64-release.apk
