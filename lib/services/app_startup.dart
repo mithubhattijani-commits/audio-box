@@ -3,6 +3,7 @@ import 'dart:async';
 import 'ads_service.dart';
 import 'app_open_ad_service.dart';
 import 'google_auth_service.dart';
+import 'launcher_icon_service.dart';
 import 'remote_config_service.dart';
 import 'supabase_service.dart';
 
@@ -41,6 +42,16 @@ class AppStartup {
           );
     } catch (_) {
       // Offline or slow: bundled defaults stay in effect.
+    }
+    // Launcher icon (v1.0.13): apply the remote-config choice.
+    // Best effort, never blocks startup; later config refreshes are
+    // picked up by the notifier listener in main().
+    try {
+      await LauncherIconService.instance.applyIfChanged(
+        RemoteConfigService.instance.config.launcherIcon,
+      );
+    } catch (_) {
+      // Native call unavailable: the default icon stays.
     }
     report(0.30, 'Connecting...');
     try {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +11,7 @@ import 'services/app_open_ad_service.dart';
 import 'services/audio_library_service.dart';
 import 'services/coins_service.dart';
 import 'services/google_auth_service.dart';
+import 'services/launcher_icon_service.dart';
 import 'services/remote_config_service.dart';
 import 'theme.dart';
 
@@ -34,6 +37,14 @@ Future<void> main() async {
   // frame so the splash screen can already use a remotely-set poster
   // image on this launch.
   await RemoteConfigService.instance.loadCache();
+  // Launcher icon (v1.0.13): re-apply whenever a fresh config
+  // arrives (launch fetch, resume, ~60s poll). applyIfChanged is a
+  // no-op when the value did not change, so this is cheap.
+  RemoteConfigService.instance.notifier.addListener(() {
+    unawaited(LauncherIconService.instance.applyIfChanged(
+      RemoteConfigService.instance.config.launcherIcon,
+    ));
+  });
   final library = AudioLibraryService();
 
   runApp(AudioBoxApp(coins: coins, library: library, prefs: prefs));

@@ -296,6 +296,7 @@ class RemoteConfig {
     this.ribbon = const RibbonConfig(),
     this.downloadAdsRequired = 2,
     this.advertisingBannerEnabled = true,
+    this.launcherIcon = 'default',
   });
 
   /// Master switch for ALL Unity ads.
@@ -343,6 +344,13 @@ class RemoteConfig {
   /// Home-screen advertising banner (chairman's photo + WhatsApp).
   /// Off hides the banner; the Help row at the bottom stays.
   final bool advertisingBannerEnabled;
+
+  /// Launcher icon id ("default" | "classic"). Bundled icons only —
+  /// a brand-new image needs one build to enter a slot. Changeable
+  /// from the website, no rebuild; applies on next launch / config
+  /// refresh (v1.0.13). Unknown values fall back to "default"
+  /// (see LauncherIconService.normalize).
+  final String launcherIcon;
 
   bool bannerEnabled(String zone) => adsEnabled && (banners[zone] == true);
 
@@ -456,6 +464,7 @@ class RemoteConfig {
           : const RibbonConfig(),
       downloadAdsRequired: downloadAdsRequired,
       advertisingBannerEnabled: advertisingBannerEnabled,
+      launcherIcon: (j['launcher_icon'] ?? '').toString(),
     );
   }
 }

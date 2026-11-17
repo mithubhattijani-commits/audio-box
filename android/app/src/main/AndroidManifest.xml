@@ -36,6 +36,30 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <!-- Launcher icon switch (v1.0.13): the "classic" (red speaker)
+             icon lives in @mipmap/ic_launcher_classic. The alias is
+             disabled by default; MainActivity.kt enables it (and
+             disables .MainActivity's launcher entry) when the remote
+             config launcher_icon = "classic". The SEND filter is
+             duplicated here so sharing text into the app keeps working
+             while the classic icon is active. -->
+        <activity-alias
+            android:name=".LauncherClassic"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_classic"
+            android:label="Magic Box From Jaani"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
